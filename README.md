@@ -20,6 +20,18 @@ Everything lives in this repo except **one** thing: the script runs
 `npm install -g omniroute@3.8.49` (the gateway itself) if it isn't already
 installed. No manual cookie copying, no hunting for skills, no extra repos.
 
+## Push to GitHub (optional, for cloning on other machines)
+
+```powershell
+gh auth login          # once — opens a browser for the OAuth flow
+powershell -ExecutionPolicy Bypass -File push-to-github.ps1
+```
+
+The script creates a **private** repo and pushes `main`. Then on any other
+machine: `git clone <url>` → run `setup.ps1`. (If you'd rather host it
+somewhere else — GitLab, Gitea, a USB stick — the kit is just a folder; copy
+it and run `setup.ps1` from there.)
+
 ## Quick start
 
 ```powershell
@@ -54,9 +66,12 @@ one manual step:
    into the copied `config.js` (old keys minted by the kit are revoked first;
    manually-created keys are left alone)
 8. Copies the extension to `%USERPROFILE%\omniroute-cookie-pusher`
-9. Registers the gateway to **auto-start at login** (Startup folder)
+9. **Wires Claude Code** to the gateway (merges the `ANTHROPIC_*` env block
+   into `~/.claude/settings.json`, preserving existing settings)
+10. Registers the gateway to **auto-start at login** (Startup folder)
 
-Flags: `-SkipInstall`, `-SkipProviders`, `-SkipExtension`, `-SkipAutoStart`.
+Flags: `-SkipInstall`, `-SkipProviders`, `-SkipExtension`, `-SkipClaudeCode`,
+`-SkipAutoStart`.
 
 ## Configuration — `config/local.env`
 
@@ -76,10 +91,32 @@ OmniRoute API key, or use the model names directly:
 
 - `nvidia/nvidia/nemotron-ultra-550b` (and every other NIM model)
 - `nvidia/...` / `opencode-zen/<model>` — see the dashboard's model list
-- leave the model blank for the `auto` pool
+- `auto` / `auto/best-coding` / `auto/best-reasoning` / `auto/best-fast` /
+  `auto/best-vision` — smart aliases over the whole free pool
 
-Claude Code / VS Code: set `ANTHROPIC_BASE_URL` to the OmniRoute endpoint and
-`ANTHROPIC_AUTH_TOKEN` to an OmniRoute API key, then pick a model name above.
+## Claude Code
+
+`setup.ps1` wires Claude Code to the gateway by merging an `env` block into
+`~/.claude/settings.json` (your existing permissions/hooks are preserved, and
+the original is backed up to `settings.json.bak-kit`):
+
+| Env var | Value | Why |
+|---|---|---|
+| `ANTHROPIC_BASE_URL` | `http://localhost:20128` | Claude Code appends `/v1/messages` itself — no `/v1` suffix |
+| `ANTHROPIC_AUTH_TOKEN` | `omniroute` | the gateway's localhost magic token — no secret stored in settings.json |
+| `ANTHROPIC_MODEL` | `auto` | default model (any `nvidia/…`, `opencode-zen/…`, `auto/best-*` also works) |
+| `ANTHROPIC_SMALL_FAST_MODEL` | `auto/best-fast` | background/summarization tasks |
+| `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `1` | lets `/model` list all 355 models from the gateway |
+| `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT` | `1` | stops window enforcement errors on non-Claude models |
+
+Then just run `claude` in any folder — traffic goes to the free pool. Switch
+models anytime with `/model` in the CLI, or set a specific one:
+
+```
+ANTHROPIC_MODEL=nvidia/nvidia/nemotron-ultra-550b claude
+```
+
+Skip with `-SkipClaudeCode` if you want to leave Claude Code alone.
 
 ## What's NOT included (by design)
 

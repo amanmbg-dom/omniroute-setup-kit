@@ -23,6 +23,9 @@
 .PARAMETER SkipExtension
   Skip the extension copy and API-key minting.
 
+.PARAMETER SkipClaudeCode
+  Skip wiring Claude Code (ANTHROPIC_* env) to the gateway.
+
 .PARAMETER SkipAutoStart
   Skip registering the login auto-start launcher.
 
@@ -34,6 +37,7 @@ param(
     [switch]$SkipInstall,
     [switch]$SkipProviders,
     [switch]$SkipExtension,
+    [switch]$SkipClaudeCode,
     [switch]$SkipAutoStart
 )
 
@@ -249,7 +253,39 @@ export const DEFAULT_API_KEY = '$token';
     Write-Ok "extension -> $extDst (fresh per-machine admin token minted)"
 }
 
-# ---------- 9. auto-start ----------
+# ---------- 9. Claude Code ----------
+if (-not $SkipClaudeCode) {
+    Write-Step 'Wiring Claude Code to the gateway'
+    # Claude Code appends /v1/messages itself; the token 'omniroute' is the
+    # gateway's localhost magic token (no secret stored in settings.json).
+    $ccDir = Join-Path $HOME '.claude'
+    $ccFile = Join-Path $ccDir 'settings.json'
+    New-Item -ItemType Directory -Force -Path $ccDir | Out-Null
+
+    if (Test-Path $ccFile) {
+        $cc = Get-Content $ccFile -Raw | ConvertFrom-Json
+    } else {
+        $cc = [pscustomobject]@{}
+    }
+    if (-not $cc.env) { $cc | Add-Member -NotePropertyName env -NotePropertyValue ([pscustomobject]@{}) }
+    $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_BASE_URL' -NotePropertyValue "http://localhost:$Port" -Force
+    $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_AUTH_TOKEN' -NotePropertyValue 'omniroute' -Force
+    $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_MODEL' -NotePropertyValue 'auto' -Force
+    $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_SMALL_FAST_MODEL' -NotePropertyValue 'auto/best-fast' -Force
+    $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY' -NotePropertyValue '1' -Force
+    $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT' -NotePropertyValue '1' -Force
+
+    $prev = Get-Content $ccFile -Raw -ErrorAction SilentlyContinue
+    $json = $cc | ConvertTo-Json -Depth 12
+    if ($prev -and $prev.Trim() -ne $json.Trim()) {
+        Copy-Item $ccFile "$ccFile.bak-kit" -Force
+    }
+    [System.IO.File]::WriteAllText($ccFile, $json, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Ok '~/.claude/settings.json -> ANTHROPIC_BASE_URL/AUTH_TOKEN/MODEL wired to the gateway'
+    Write-Ok '   (existing permissions/hooks preserved; original backed up to settings.json.bak-kit)'
+}
+
+# ---------- 10. auto-start ----------
 if (-not $SkipAutoStart) {
     Write-Step 'Registering auto-start at login'
     $startup = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'
@@ -261,7 +297,7 @@ if (-not $SkipAutoStart) {
     }
 }
 
-# ---------- 10. summary ----------
+# ---------- 11. summary ----------
 Write-Host ''
 Write-Host '=================================================' -ForegroundColor Cyan
 Write-Host '  Setup complete' -ForegroundColor Cyan
@@ -269,6 +305,7 @@ Write-Host '=================================================' -ForegroundColor 
 Write-Host "  Gateway   : $Base          (auto-starts at login)"
 Write-Host "  Dashboard : $Base/admin    (password from config/local.env - change it!)"
 Write-Host "  Extension : $HOME\omniroute-cookie-pusher"
+if (-not $SkipClaudeCode) { Write-Host "  Claude Code: wired (run 'claude' - model 'auto', list all with /model)" }
 Write-Host ''
 Write-Host '  Last step, once, ~1 minute:' -ForegroundColor Yellow
 Write-Host "    1. Open edge://extensions (or chrome://extensions)"
