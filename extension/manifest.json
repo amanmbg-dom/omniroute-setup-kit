@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "OmniRoute Cookie Pusher",
+  "version": "1.0.0",
+  "description": "Grab your signed-in sessions (cookies + localStorage tokens) for OmniRoute's web-cookie providers and push them to the local gateway at localhost:20128.",
+  "permissions": ["cookies", "storage", "scripting", "tabs", "alarms"],
+  "host_permissions": [
+    "http://localhost:20128/*",
+    "https://huggingface.co/*",
+    "https://chat.qwen.ai/*",
+    "https://gemini.google.com/*",
+    "https://chat.z.ai/*",
+    "https://yuanbao.tencent.com/*",
+    "https://chat.deepseek.com/*",
+    "https://www.kimi.com/*",
+    "https://zenmux.ai/*",
+    "https://arena.ai/*",
+    "https://www.meta.ai/*",
+    "https://t3.chat/*",
+    "https://www.dola.com/*",
+    "https://hailuo.ai/*",
+    "https://chatgpt.com/*",
+    "https://grok.com/*",
+    "https://www.perplexity.ai/*",
+    "https://claude.ai/*",
+    "https://poe.com/*",
+    "https://venice.ai/*",
+    "https://www.blackbox.ai/*",
+    "https://v0.dev/*",
+    "https://www.notion.so/*",
+    "https://copilot.microsoft.com/*",
+    "https://business.gemini.google/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "OmniRoute Cookie Pusher"
+  }
+}

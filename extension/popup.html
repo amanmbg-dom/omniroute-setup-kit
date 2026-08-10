@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>OmniRoute Cookie Pusher</title>
+  <style>
+    :root {
+      --bg: #1e1438;
+      --panel: #2a1e4e;
+      --panel-2: #33256a;
+      --text: #eae6f5;
+      --muted: #a89fc4;
+      --accent: #8b5cf6;
+      --ok: #34d399;
+      --warn: #fbbf24;
+      --bad: #f87171;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 380px;
+      background: var(--bg);
+      color: var(--text);
+      font: 13px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: 14px;
+    }
+    h1 { font-size: 15px; margin-bottom: 2px; display: flex; align-items: center; gap: 8px; }
+    h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+    .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter .15s;
+    }
+    button:hover { filter: brightness(1.1); }
+    button:disabled { opacity: .55; cursor: default; }
+    button.secondary {
+      margin-top: 6px;
+      background: var(--panel-2);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px;
+    }
+    label.check { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 12px; color: var(--text); cursor: pointer; }
+    label.check input { width: auto; }
+    select {
+      width: 100%;
+      padding: 7px 9px;
+      border-radius: 7px;
+      border: 1px solid #3a2d66;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 12px;
+    }
+    #results { margin-top: 12px; max-height: 300px; overflow-y: auto; }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 9px;
+      border-radius: 7px;
+      background: var(--panel);
+      margin-bottom: 5px;
+    }
+    .row .name { flex: 1; }
+    .row .tag { font-size: 10px; padding: 2px 6px; border-radius: 99px; background: var(--panel-2); color: var(--muted); }
+    .row .status { font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    .muted { color: var(--muted); }
+    details {
+      margin-top: 12px;
+      border-top: 1px solid #3a2d66;
+      padding-top: 10px;
+    }
+    summary { cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600; }
+    label { display: block; font-size: 11px; color: var(--muted); margin: 8px 0 3px; }
+    input {
+      width: 100%;
+      padding: 7px 9px;
+      border-radius: 7px;
+      border: 1px solid #3a2d66;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .hint { font-size: 11px; color: var(--muted); margin-top: 8px; }
+    .footer { margin-top: 10px; font-size: 11px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1><span class="dot"></span>OmniRoute Cookie Pusher</h1>
+  <div class="sub">Grabs signed-in sessions and pushes them to the local gateway</div>
+
+  <button id="go">Grab &amp; push sessions</button>
+  <button id="checkExpired" class="secondary">Check expired</button>
+
+  <div id="results"></div>
+
+  <details>
+    <summary>Settings</summary>
+    <label for="url">OmniRoute URL</label>
+    <input id="url" type="text" spellcheck="false">
+    <label for="apikey">API key (Bearer)</label>
+    <input id="apikey" type="password" spellcheck="false">
+    <div class="hint">The extension talks only to the URL above. The API key is created in the OmniRoute dashboard (Settings → API Keys) or via <code>omniroute tokens create --scope admin</code>. An admin-scope key is pre-filled (see config.js).</div>
+    <label class="check"><input id="autoRefresh" type="checkbox"> Auto-refresh sessions</label>
+    <label for="refreshHours">Full refresh every</label>
+    <select id="refreshHours">
+      <option value="2">2 hours</option>
+      <option value="6">6 hours</option>
+      <option value="12">12 hours</option>
+      <option value="24">24 hours</option>
+      <option value="168">1 week</option>
+    </select>
+    <div class="hint">While on, the extension re-grabs all signed-in sessions on the schedule above, and checks every 30 minutes for connections OmniRoute reports as expired (re-pushing just those). Runs only while the browser is open.</div>
+  </details>
+
+  <div class="footer" id="footer"></div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

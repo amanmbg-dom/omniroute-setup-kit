@@ -1,0 +1,8 @@
+# Runtime artifacts (never generated in this repo, but just in case)
+logs/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+db_backups/
+node_modules/
+*.log
