@@ -61,8 +61,13 @@ export const DEFAULT_REFRESH_HOURS = 6;
 
 export async function getSettings() {
   const stored = await chrome.storage.local.get(['url', 'apiKey', 'autoRefresh', 'refreshHours']);
+  // The gateway binds IPv4 only. Chrome resolves 'localhost' to ::1 on
+  // Windows, so always use the IPv4 literal - even if a stale 'localhost'
+  // URL was saved to chrome.storage before this fix.
+  let url = stored.url || DEFAULT_URL;
+  if (/localhost|::1/.test(url)) url = DEFAULT_URL;
   return {
-    url: stored.url || DEFAULT_URL,
+    url,
     apiKey: stored.apiKey || DEFAULT_API_KEY,
     autoRefresh: stored.autoRefresh !== false,
     refreshHours: stored.refreshHours || DEFAULT_REFRESH_HOURS,

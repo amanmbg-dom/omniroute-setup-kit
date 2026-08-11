@@ -6,6 +6,7 @@
   "permissions": ["cookies", "storage", "scripting", "tabs", "alarms"],
   "host_permissions": [
     "http://localhost:20128/*",
+    "http://127.0.0.1:20128/*",
     "https://huggingface.co/*",
     "https://chat.qwen.ai/*",
     "https://gemini.google.com/*",
