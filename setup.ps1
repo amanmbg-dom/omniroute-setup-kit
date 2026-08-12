@@ -385,10 +385,11 @@ if (-not $SkipClaudeCode) {
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY' -NotePropertyValue '1' -Force
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT' -NotePropertyValue '1' -Force
 
-    # Only the reliable coding combo shows in the /model picker (gateway-discovered
-    # models are filtered by this allowlist). It auto-falls-back to healthy providers,
-    # so dead NIM models never interrupt a session. Add more ids here to expose them.
-    $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue @('auto/coding:reliable') -Force
+    # The /model picker shows only gateway-discovered models on this allowlist.
+    # reliable = default coding combo (auto-falls-back to healthy providers, so
+    # dead NIM models never interrupt); the other three give one-click access to
+    # vision, best-coding and fastest routing. Add more ids here to expose them.
+    $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue @('auto/coding:reliable', 'auto/best-vision', 'auto/best-coding', 'auto/best-fast') -Force
 
     $prev = Get-Content $ccFile -Raw -ErrorAction SilentlyContinue
     $json = $cc | ConvertTo-Json -Depth 12
