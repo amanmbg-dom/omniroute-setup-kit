@@ -67,7 +67,7 @@ one manual step:
 ## What setup.ps1 does
 
 1. Checks Node.js (install with `winget install OpenJS.NodeJS.LTS` if missing)
-2. Installs OmniRoute (`npm i -g omniroute@3.8.49`) — the only download
+2. Installs OmniRoute (`npm i -g omniroute@3.8.49`) — the core download
 3. Writes the gateway launcher to `~\.omniroute\` and starts the server
 4. Logs in to the dashboard (password from `config/local.env`)
 5. Adds **NVIDIA NIM** + **OpenCode Zen** with your keys (skips if present)
@@ -84,6 +84,13 @@ one manual step:
     the `flowui` **MCP server** in Claude Code (`generate_image` tool) so every
     image request funnels through the same engine
 9. **Wires Claude Code** to the gateway (merges the `ANTHROPIC_*` env block
+9b. **Extra MCPs + skills.sh**: registers Playwright, Context7, Chrome DevTools,
+    Memory, Filesystem, Sequential Thinking, Everything, Fetch and GitHub MCP
+    servers (idempotent, GitHub only when `gh` is logged in), installs the
+    `skills` CLI and a curated set of high-value skills (tdd, diagnosing-bugs,
+    improve-codebase-architecture, grill-me, vercel-react-best-practices,
+    deploy-to-vercel)
+
    into `~/.claude/settings.json`, preserving existing settings)
 10. Registers the gateway **and the flowui bridge** to **auto-start at login**
     (Startup folder)

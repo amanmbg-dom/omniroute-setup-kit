@@ -431,6 +431,71 @@ if (-not $SkipClaudeCode) {
     }
 }
 
+# ---------- 9b. extra MCPs + skills.sh ----------
+if (-not $SkipClaudeCode) {
+    Write-Step 'Installing extra MCP servers + skills.sh (all idempotent)'
+
+    # Global npm packages powering the MCP servers. Installed once; re-runs skip
+    # (a package is 'present' when its bin command exists on PATH).
+    $mcpBins = 'playwright-mcp', 'context7-mcp', 'chrome-devtools-mcp', 'mcp-server-memory', 'mcp-server-filesystem', 'mcp-server-sequential-thinking', 'mcp-server-everything', 'mcp-fetch', 'mcp-server-github', 'skills'
+    $mcpPackages = @('@playwright/mcp', '@upstash/context7-mcp', 'chrome-devtools-mcp', '@modelcontextprotocol/server-memory', '@modelcontextprotocol/server-filesystem', '@modelcontextprotocol/server-sequential-thinking', '@modelcontextprotocol/server-everything', 'mcp-fetch', '@modelcontextprotocol/server-github', 'skills')
+    $needInstall = @()
+    for ($i = 0; $i -lt $mcpBins.Count; $i++) {
+        if (-not (Get-Command $mcpBins[$i] -ErrorAction SilentlyContinue)) { $needInstall += $mcpPackages[$i] }
+    }
+    if ($needInstall.Count -gt 0) {
+        Write-Host "    npm i -g $($needInstall -join ' ') (one-time)" -ForegroundColor DarkGray
+        & npm install -g $needInstall 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Ok "installed $($needInstall.Count) global package(s)" }
+        else { Write-Warn 'npm install failed - MCP servers may not start; re-run setup.ps1 to retry' }
+    } else {
+        Write-Ok 'all MCP packages already installed globally'
+    }
+
+    # Register each MCP server (idempotent: claude mcp add replaces existing).
+    function Add-Mcp([string]$name, [string]$cmd, [string[]]$mcpArgs = @(), [hashtable]$mcpEnv = @{}) {
+        if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
+            Write-Warn "$cmd not found - skipping MCP '$name'"
+            return
+        }
+        & claude mcp remove $name 2>$null | Out-Null
+        $argList = @()
+        foreach ($k in $mcpEnv.Keys) { $argList += '--env'; $argList += "$k=$($mcpEnv[$k])" }
+        $argList += $cmd
+        $argList += $mcpArgs
+        & claude mcp add -s user $name @argList 2>$null
+        if ($LASTEXITCODE -eq 0) { Write-Ok "MCP '$name' registered" }
+        else { Write-Warn "claude mcp add $name failed" }
+    }
+
+    Add-Mcp 'playwright' 'playwright-mcp'
+    Add-Mcp 'context7' 'context7-mcp'
+    Add-Mcp 'chrome-devtools' 'chrome-devtools-mcp'
+    Add-Mcp 'sequential-thinking' 'mcp-server-sequential-thinking'
+    Add-Mcp 'everything' 'mcp-server-everything'
+    Add-Mcp 'fetch' 'mcp-fetch'
+    $memDir = Join-Path $ccDir 'memory'
+    New-Item -ItemType Directory -Force -Path $memDir | Out-Null
+    Add-Mcp 'memory' 'mcp-server-memory' @('--storage-path', (Join-Path $memDir 'memory.json'))
+    Add-Mcp 'filesystem' 'mcp-server-filesystem' @($HOME)
+
+    # GitHub MCP only if gh is authenticated on this machine.
+    $ghToken = gh auth token 2>$null
+    if ($ghToken) {
+        Add-Mcp 'github' 'mcp-server-github' @() @{ GITHUB_PERSONAL_ACCESS_TOKEN = $ghToken }
+    } else {
+        Write-Warn 'gh not authenticated - skipping GitHub MCP (run "gh auth login" then re-run setup)'
+    }
+
+    # skills.sh CLI + a curated set of high-value skills for Claude Code.
+    $curated = @('tdd', 'diagnosing-bugs', 'improve-codebase-architecture', 'grill-me', 'vercel-react-best-practices', 'deploy-to-vercel')
+    & skills add mattpocock/skills --skill tdd --skill diagnosing-bugs --skill improve-codebase-architecture --skill grill-me -g -a claude-code --copy -y 2>&1 | Out-Null
+    & skills add vercel-labs/agent-skills --skill vercel-react-best-practices --skill deploy-to-vercel -g -a claude-code --copy -y 2>&1 | Out-Null
+    Write-Ok "skills.sh ready - curated skills installed: $($curated -join ', ')"
+    Write-Host '    discover more with:  skills find <keyword>   |   browse skills.sh' -ForegroundColor DarkGray
+    Write-Host '    add more with:       skills add <owner>/<repo> --skill <name> -g -a claude-code' -ForegroundColor DarkGray
+}
+
 # ---------- 10. auto-start ----------
 if (-not $SkipAutoStart) {
     Write-Step 'Registering auto-start at login'
