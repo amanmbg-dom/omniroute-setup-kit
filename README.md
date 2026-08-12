@@ -109,8 +109,10 @@ OmniRoute API key, or use the model names directly:
 
 - `nvidia/nvidia/nemotron-ultra-550b` (and every other NIM model)
 - `nvidia/...` / `opencode-zen/<model>` — see the dashboard's model list
-- `auto` / `auto/best-coding` / `auto/best-reasoning` / `auto/best-fast` /
+- `auto/best-coding` / `auto/best-reasoning` / `auto/best-fast` /
   `auto/best-vision` — smart aliases over the whole free pool
+- `auto/coding:reliable` — **the default**: health-scored routing that skips
+  dead/failed providers (fixes "hitting dead NIM models over and over")
 
 ## Claude Code
 
@@ -122,13 +124,16 @@ the original is backed up to `settings.json.bak-kit`):
 |---|---|---|
 | `ANTHROPIC_BASE_URL` | `http://localhost:20128` | Claude Code appends `/v1/messages` itself — no `/v1` suffix |
 | `ANTHROPIC_AUTH_TOKEN` | `omniroute` | the gateway's localhost magic token — no secret stored in settings.json |
-| `ANTHROPIC_MODEL` | `auto` | default model (any `nvidia/…`, `opencode-zen/…`, `auto/best-*` also works) |
+| `ANTHROPIC_MODEL` | `auto/coding:reliable` | default model — the reliability-first auto combo: it scores providers by health and auto-falls-back when a model is dead, so NIM outages never interrupt a session (any `nvidia/…`, `opencode-zen/…`, `auto/best-*` also works) |
 | `ANTHROPIC_SMALL_FAST_MODEL` | `auto/best-fast` | background/summarization tasks |
 | `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `1` | lets `/model` list all 355 models from the gateway |
 | `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT` | `1` | stops window enforcement errors on non-Claude models |
 
 Then just run `claude` in any folder — traffic goes to the free pool. Switch
-models anytime with `/model` in the CLI, or set a specific one:
+models anytime with `/model` in the CLI, or set a specific one. For quick
+tasks, use the `/fast` command (ships with the kit) to switch to
+`auto/best-fast` latency-first routing; it also tells the agent to skip
+unnecessary verification and answer directly.
 
 ```
 ANTHROPIC_MODEL=nvidia/nvidia/nemotron-ultra-550b claude

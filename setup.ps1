@@ -380,14 +380,15 @@ if (-not $SkipClaudeCode) {
     if (-not $cc.env) { $cc | Add-Member -NotePropertyName env -NotePropertyValue ([pscustomobject]@{}) }
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_BASE_URL' -NotePropertyValue "http://localhost:$Port" -Force
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_AUTH_TOKEN' -NotePropertyValue 'omniroute' -Force
-    $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_MODEL' -NotePropertyValue 'auto' -Force
+    $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_MODEL' -NotePropertyValue 'auto/coding:reliable' -Force
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_SMALL_FAST_MODEL' -NotePropertyValue 'auto/best-fast' -Force
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY' -NotePropertyValue '1' -Force
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT' -NotePropertyValue '1' -Force
 
-    # Only 'auto' shows in the /model picker (gateway-discovered models are
-    # filtered by this allowlist). Add more ids here to expose them again.
-    $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue @('auto') -Force
+    # Only the reliable coding combo shows in the /model picker (gateway-discovered
+    # models are filtered by this allowlist). It auto-falls-back to healthy providers,
+    # so dead NIM models never interrupt a session. Add more ids here to expose them.
+    $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue @('auto/coding:reliable') -Force
 
     $prev = Get-Content $ccFile -Raw -ErrorAction SilentlyContinue
     $json = $cc | ConvertTo-Json -Depth 12
