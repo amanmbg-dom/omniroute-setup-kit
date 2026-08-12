@@ -139,6 +139,19 @@ async function main() {
   const manifestPath = path.join(cfg.outDir, 'images-manifest.json');
   const state = { done: false, baseUrl: cfg.baseUrl || '', upload: cfg.upload, slots: {} };
 
+  // Merge with an existing manifest so re-running the pipeline for a few slots
+  // (retry / add-one) NEVER clobbers the slots already generated.
+  try {
+    if (fs.existsSync(manifestPath)) {
+      const prev = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (prev && typeof prev === 'object' && prev.slots) {
+        state.slots = { ...prev.slots };
+        if (!cfg.baseUrl && prev.baseUrl) state.baseUrl = prev.baseUrl;
+        state.upload = cfg.upload || !!prev.upload;
+      }
+    }
+  } catch { /* fresh start */ }
+
   const writeState = () => {
     try { fs.writeFileSync(manifestPath, JSON.stringify(state, null, 2)); } catch { /* keep going */ }
   };
@@ -151,13 +164,37 @@ async function main() {
     process.exit(1);
   }
 
+  const RETRIES = 2; // consecutive jobs can hit a transient Flow UI state; retry before giving up
+
   for (const slot of slots) {
     const key = slot.key;
     const entry = { status: 'pending' };
     state.slots[key] = entry;
-    log(`[${key}] generating (${slot.size || '1024x1024'})...`);
+    let items = null;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= RETRIES && !items; attempt++) {
+      if (attempt > 1) {
+        log(`[${key}] retry ${attempt - 1}/${RETRIES - 1} after transient failure (${lastErr?.message?.slice(0, 80)})...`);
+        await new Promise(r => setTimeout(r, 10000));
+        // Clear any modal/preview state so the next attempt starts clean.
+        try { await fetch(`${cfg.bridge}/health`, { signal: AbortSignal.timeout(3000) }); } catch { /* ignore */ }
+      }
+      log(`[${key}] generating (${slot.size || '1024x1024'})...`);
+      try {
+        items = await generateSlot(cfg.bridge, slot);
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (!items) {
+      entry.status = 'error';
+      entry.error = lastErr.message;
+      if (lastErr.reSignIn) entry.error += ' (run bridge\\flow-browser\\re-sign-in.cmd to sign in again)';
+      log(`[${key}] ERROR: ${entry.error}`);
+      writeState();
+      continue;
+    }
     try {
-      const items = await generateSlot(cfg.bridge, slot);
       const files = [];
       for (let i = 0; i < items.length; i++) {
         const raw = items[i].b64_json || '';

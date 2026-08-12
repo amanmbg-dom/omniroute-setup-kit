@@ -415,6 +415,19 @@ if (-not $SkipClaudeCode) {
         }
         Write-Ok "$installed kit skill(s) installed to ~/.claude/skills (skipped existing)"
     }
+
+    # Ship the kit's Claude Code slash commands (~/.claude/commands), e.g. /images.
+    $cmdsSrc = Join-Path $PSScriptRoot 'commands'
+    $cmdsDst = Join-Path $ccDir 'commands'
+    if (Test-Path $cmdsSrc) {
+        New-Item -ItemType Directory -Force -Path $cmdsDst | Out-Null
+        $cmdCount = 0
+        foreach ($cmdFile in Get-ChildItem $cmdsSrc -File) {
+            Copy-Item $cmdFile.FullName (Join-Path $cmdsDst $cmdFile.Name) -Force
+            $cmdCount++
+        }
+        Write-Ok "$cmdCount Claude Code command(s) installed to ~/.claude/commands (e.g. /images)"
+    }
 }
 
 # ---------- 10. auto-start ----------

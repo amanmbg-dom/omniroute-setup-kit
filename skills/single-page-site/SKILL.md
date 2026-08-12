@@ -30,7 +30,7 @@ If the user's prompt already contains these, use them. Otherwise ask for the ess
 5. **Products / services to feature** — names, one line each
 6. **Contact** — phone, email, address, WhatsApp, socials (whatever exists)
 7. **Anything that must appear** — tagline, offers, pricing, specific colours, things to avoid
-8. **Image hosting** — does the client have hosting/a domain for images? If yes, the base URL (e.g. `https://client.com/images/`). If no: default to auto-hosting (free direct links via catbox) or the `images/` folder they upload to their host. The user may also just say "you decide".
+8. **Image hosting** — default: **anonymous hosting** (free direct links via catbox, no account, no client URLs). Don't ask for URLs — the client won't provide any. Only note a base URL if the client explicitly has hosting they want used.
 
 If the user says "you decide" or leaves a field blank, fill it with judgment and note it in the summary. Never invent contact details that will embarrass them — use real ones; if unknown, use tasteful placeholders they can swap.
 
@@ -134,26 +134,27 @@ The image engine, model (Nano Banana 2), and ratio mapping are FIXED (same bridg
   ]
 }
 ```
-2. Start the pipeline DETACHED so it keeps running while you build (the script is `site-images.mjs`, shipped next to this SKILL.md):
+2. Start the pipeline DETACHED so it keeps running while you build. **Default = anonymous hosting** (auto-upload to catbox.moe — free, no account, real direct hotlink URLs — the client provides no URLs):
 ```
-# real links immediately (auto-uploads each image to catbox.moe — free, anonymous, direct hotlink URLs)
 powershell -NoProfile -Command "Start-Process -FilePath node -ArgumentList 'site-images.mjs','site-images.json','--out','images','--upload' -WindowStyle Hidden"
-
-# OR the client has hosting: bake their base URL in (no upload needed)
-powershell -NoProfile -Command "Start-Process -FilePath node -ArgumentList 'site-images.mjs','site-images.json','--out','images','--base-url','https://client.com/images/' -WindowStyle Hidden"
-
-# OR plain folder mode: URLs stay /images/<key>-1.jpg and the client uploads the folder
-powershell -NoProfile -Command "Start-Process -FilePath node -ArgumentList 'site-images.mjs','site-images.json','--out','images' -WindowStyle Hidden"
 ```
-The pipeline: generates each slot through the bridge (one job ≈ 4 candidates), saves them to `images/`, optionally uploads, and rewrites **`images/images-manifest.json` after every slot** (`{done, slots: {key: {status, file, url}}}`). The bridge serializes generations (one Chrome tab), so the pipeline runs them back-to-back — that's fine, it's in the background.
+(`site-images.mjs` ships in this skill's folder. Run from the folder that contains your spec, or pass the full script path.) Optional overrides, ONLY when the client has hosting: `--base-url https://client.com/images/` (bakes their URLs, no upload) or plain folder mode (URLs stay `/images/…`, client uploads the folder).
 
-#### 3.3.2 Build the site while the images generate (parallel)
+The pipeline: generates each slot through the bridge (one job ≈ 4 candidates), saves them to `images/`, uploads the chosen one per slot, and rewrites **`images/images-manifest.json` after every slot** (`{done, slots: {key: {status, file, url}}}`). The bridge serializes generations (one Chrome tab), so the pipeline runs them back-to-back — that's fine, it's in the background.
 
-Write the full HTML/CSS/copy (§2.3, §3.1, §3.2) **while Chrome churns through the slots**. When the page structure is done, read `images/images-manifest.json`:
-- **Done** (`done: true`) → wire every `slots[key].url` into the matching `<img src>`.
-- **Not done** → poll: `sleep` in 20–30s steps (each slot ≈ 30–60s) and re-read until done.
-- **Slot error** (`status: "error"`) → hand-craft an inline SVG in the page palette for that slot and note it in the summary.
-- If `url` is a relative `/images/<key>-1.jpg` path, that's the folder mode — the images/ folder ships with the page.
+#### 3.3.2 Build in parallel, then AUTO-INTEGRATE the images (mandatory — this is the point)
+
+Write the full HTML/CSS/copy (§2.3, §3.1, §3.2) **while Chrome churns through the slots**. As you write each `<img>`, give it a placeholder `src=""` plus a `data-slot="<key>"` attribute — the integration happens at the end, automatically:
+
+1. When the page structure is done, read `images/images-manifest.json`.
+2. **Not done** → poll: `sleep` in 20–30s steps (each slot ≈ 30–60s) and re-read until done. **Never deliver a page with empty image srcs.**
+3. **Done** (`done: true`) → run the deterministic auto-integration script (ships in this skill's folder) instead of hand-editing:
+```
+node integrate-images.mjs <your-page>.html images/images-manifest.json
+```
+It fills every `<img src="" data-slot="<key>">` with the manifest URL and removes the markers. Exit 0 = all wired.
+4. **Exit 1 (unresolved slots)** → the script prints which slots failed; hand-craft an inline SVG in the page palette for each and note it in the summary.
+5. **Delivery gate (hard):** before handing over, scan the final HTML for `src=""` / `src="#"` — if any remain, the integration is NOT finished; complete it first. Every `<img>` must have a real http(s) URL or a data: SVG by the time you deliver.
 
 #### 3.3.3 Standardized prompt template (fill in, keep the structure)
 ```
@@ -224,7 +225,7 @@ Run EVERY row before handing over — this is the client's audit, baked in:
 Hand over:
 1. The complete `.html` file (saved to a sensible location, named `<business>-<city>-single-page.html`)
 2. The **`images/` folder** (the files behind the URLs) + `images-manifest.json`
-3. **Hosting instructions** — where each URL points and how to get the images live: upload the `images/` folder to the client host (folder mode), or the links are already live (catbox / base-URL mode)
+3. **Hosting note** — with anonymous hosting the image links are **already live** (catbox, no account); the `images/` folder is delivered as backup and for the client's own host later if they ever want first-party images
 4. A one-paragraph summary: what was built, the primary keyword used, which image path (pipeline / MCP / SVG fallback), the hosting mode, and how to regenerate images
 5. A mini SEO scorecard — the checklist above with passes highlighted (so the client sees the audit is green before they even run it)
 
