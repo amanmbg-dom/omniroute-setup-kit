@@ -1,0 +1,11 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute dashboard [options]
+
+Open the OmniRoute dashboard in a browser
+
+Options:
+  --url          Print dashboard URL without opening browser
+  --port <port>  Port the server is running on
+  --tui          Open interactive TUI dashboard (terminal UI, 7 tabs)
+  -h, --help     display help for command

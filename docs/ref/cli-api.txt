@@ -1,0 +1,45 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute api [options] [command]
+
+Direct REST API access (generated from OpenAPI spec)
+
+Options:
+  -h, --help           display help for command
+
+Commands:
+  tags                 List available API tag groups
+  playground           Playground endpoints
+  memory               Memory endpoints
+  chat                 Chat endpoints
+  messages             Messages endpoints
+  responses            Responses endpoints
+  embeddings           Embeddings endpoints
+  images               Images endpoints
+  audio                Audio endpoints
+  moderations          Moderations endpoints
+  rerank               Rerank endpoints
+  system               System endpoints
+  models               Models endpoints
+  providers            Providers endpoints
+  provider-nodes       Provider Nodes endpoints
+  api-keys             API Keys endpoints
+  combos               Combos endpoints
+  settings             Settings endpoints
+  compression          Compression endpoints
+  proxy-subscriptions  Proxy Subscriptions endpoints
+  usage                Usage endpoints
+  pricing              Pricing endpoints
+  translator           Translator endpoints
+  cli-remote-mode      CLI Remote Mode endpoints
+  cli-tools            CLI Tools endpoints
+  embedded-services    Embedded Services endpoints
+  oauth                OAuth endpoints
+  cloud                Cloud endpoints
+  fallback             Fallback endpoints
+  telemetry            Telemetry endpoints
+  quota                Quota endpoints
+  agentbridge          AgentBridge endpoints
+  traffic-inspector    Traffic Inspector endpoints
+  agent-skills         Agent Skills endpoints
+  help [command]       display help for command

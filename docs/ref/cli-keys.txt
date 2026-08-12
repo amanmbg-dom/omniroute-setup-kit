@@ -1,0 +1,22 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute keys [options] [command]
+
+API Keys
+
+Options:
+  -h, --help                         display help for command
+
+Commands:
+  add [options] <provider> [apiKey]  Add or update an API key for a provider
+  list [options]                     List all configured API keys
+  remove [options] <provider>        Remove an API key for a provider
+  regenerate [options] <id>          Regenerate an OmniRoute API key
+  revoke [options] <id>              Revoke an OmniRoute API key
+  reveal <id>                        Reveal the unmasked API key value
+  usage [options] <id>               Show recent usage for an API key
+  policy                             Key Policy
+  expiration                         Key Expiration
+  rotate [options] <id>              Generate a new key and invalidate the old
+                                     one
+  help [command]                     display help for command

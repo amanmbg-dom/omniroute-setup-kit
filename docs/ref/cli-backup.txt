@@ -1,0 +1,12 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute backup [options] [command]
+
+Create a backup of OmniRoute data
+
+Options:
+  -h, --help        display help for command
+
+Commands:
+  create [options]  Create a backup of OmniRoute data
+  auto              Backup Schedule

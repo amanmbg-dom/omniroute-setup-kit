@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute cost [options]
+
+Show cost report with breakdown by provider, model, combo, or API key
+
+Options:
+  --period <range>    Time range: 1d|7d|30d|90d|ytd|all (default: 30d) (default:
+                      "30d")
+  --since <date>      Start date (ISO format, e.g. 2026-01-01) — overrides
+                      --period
+  --until <date>      End date (ISO format)
+  --group-by <field>  Group results by: provider|model|api-key|combo|day
+                      (default: provider) (default: "provider")
+  --api-key <key>     Filter by a specific API key
+  --limit <n>         Maximum number of rows to show (default: 100) (default:
+                      100)
+  -h, --help          display help for command

@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute plugin [options] [command]
+
+Manage CLI plugins (omniroute-cmd-*)
+
+Options:
+  -h, --help                         display help for command
+
+Commands:
+  list                               List installed plugins
+  install [options] <name>           Install a plugin from npm or local path
+  remove|uninstall [options] <name>  Remove an installed plugin
+  info <name>                        Show details for an installed plugin
+  search [query]                     Search npm registry for available plugins
+  update [name]                      Update installed plugin(s)
+  scaffold <name>                    Scaffold a new plugin boilerplate
+  help [command]                     display help for command

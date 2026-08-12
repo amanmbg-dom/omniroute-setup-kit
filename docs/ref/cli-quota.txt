@@ -1,0 +1,10 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute quota [options]
+
+Show provider quota usage
+
+Options:
+  --provider <id>  Filter by provider
+  --json           Output as JSON
+  -h, --help       display help for command

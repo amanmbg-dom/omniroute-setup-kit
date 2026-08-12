@@ -1,0 +1,16 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute audit [options] [command]
+
+Access compliance and MCP audit logs
+
+Options:
+  -h, --help                display help for command
+
+Commands:
+  tail [options]            Show recent audit log entries
+  search [options] <query>  Search audit log entries by keyword
+  export [options] <file>   Export audit log to file
+  stats [options]           Show audit log statistics
+  get [options] <id>        Get a single audit log entry by ID
+  help [command]            display help for command

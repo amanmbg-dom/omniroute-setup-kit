@@ -1,0 +1,20 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute sync [options] [command]
+
+Sync configuration between OmniRoute instances
+
+Options:
+  -h, --help                     display help for command
+
+Commands:
+  push [options]                 Push config to cloud or remote instance
+  pull [options]                 Pull config from cloud or remote
+  diff [options]
+  bundle [options] <outPath>     Export config as a bundle file
+  import [options] <bundlePath>  Import a bundle file
+  initialize [options]
+  tokens                         Manage sync tokens
+  status
+  resolve                        Resolve sync conflicts interactively
+  help [command]                 display help for command

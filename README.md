@@ -66,12 +66,19 @@ one manual step:
    into the copied `config.js` (old keys minted by the kit are revoked first;
    manually-created keys are left alone)
 8. Copies the extension to `%USERPROFILE%\omniroute-cookie-pusher`
+8b. Installs the **gemini-bridge** (free Nano Banana images via your
+    google.com session token — `gflow/nano-banana-2`)
+8c. Installs the **flowui bridge** (Google Flow images via your real Chrome
+    session — `flowui/nano-banana-2`), **headless by default**, and registers
+    the `flowui` **MCP server** in Claude Code (`generate_image` tool) so every
+    image request funnels through the same engine
 9. **Wires Claude Code** to the gateway (merges the `ANTHROPIC_*` env block
    into `~/.claude/settings.json`, preserving existing settings)
-10. Registers the gateway to **auto-start at login** (Startup folder)
+10. Registers the gateway **and the flowui bridge** to **auto-start at login**
+    (Startup folder)
 
 Flags: `-SkipInstall`, `-SkipProviders`, `-SkipExtension`, `-SkipClaudeCode`,
-`-SkipAutoStart`.
+`-SkipAutoStart`, `-SkipBridge` (gemini-bridge), `-SkipFlowBridge` (flowui).
 
 ## Configuration — `config/local.env`
 
@@ -117,6 +124,30 @@ ANTHROPIC_MODEL=nvidia/nvidia/nemotron-ultra-550b claude
 ```
 
 Skip with `-SkipClaudeCode` if you want to leave Claude Code alone.
+
+## Free AI images (Google Flow — `flowui`)
+
+`flowui/nano-banana-2` (Nano Banana 2) generates premium images through your
+**real, signed-in Google session** — no API key, no credits, no captcha. The
+bridge drives the actual Google Flow web app in a dedicated Chrome profile
+(headless by default). Setup: sign in once with `bridge\flow-browser\re-sign-in.cmd`;
+the bridge then auto-starts at login.
+
+Every caller hits the **same bridge → same Chrome session → same model → same
+ratio mapping**, so image quality is consistent whether you ask via the
+`generate_image` **MCP tool** in Claude Code, via the `single-page-site`
+skill, or via raw HTTP:
+
+```bash
+curl -s -X POST http://127.0.0.1:20128/v1/images/generations \
+  -H "Authorization: Bearer omniroute" -H "Content-Type: application/json" \
+  -d '{"model":"flowui/nano-banana-2","prompt":"a red sports car, studio lighting","size":"1536x1024","n":4}'
+```
+
+Sizes: `1792x1024` (16:9 hero) · `1536x1024` (4:3) · `1024x1024` (square) ·
+`1024x1536` (3:4) · `1024x1792` (9:16). Flow gives free daily image credits
+per Google account — on exhaustion, switch account or wait for the reset.
+Details: `bridge\flow-browser\README-flowui.md`.
 
 ## What's NOT included (by design)
 

@@ -1,0 +1,11 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute doctor [options]
+
+OmniRoute Doctor
+
+Options:
+  --no-liveness         Skip HTTP health endpoint probing
+  --host <host>         Host for server liveness probing (default: "127.0.0.1")
+  --liveness-url <url>  Full health endpoint URL override
+  -h, --help            display help for command

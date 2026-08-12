@@ -1,0 +1,13 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute cache [options] [command]
+
+Manage response cache
+
+Options:
+  -h, --help              display help for command
+
+Commands:
+  status|stats [options]  Show cache statistics
+  clear [options]         Clear all cached responses
+  help [command]          display help for command

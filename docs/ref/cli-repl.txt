@@ -1,0 +1,12 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute repl [options]
+
+Interactive multi-turn REPL with LLM
+
+Options:
+  -m, --model <id>       Model to use (default: auto)
+  --combo <name>         Combo name to use
+  -s, --system <prompt>  System prompt
+  --resume <session>     Resume a saved session by name
+  -h, --help             display help for command

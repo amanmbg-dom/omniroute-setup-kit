@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute eval [options] [command]
+
+Manage eval suites and runs
+
+Options:
+  -h, --help                 display help for command
+
+Commands:
+  suites                     Manage eval suites
+  run [options] <suiteId>    Start an eval run for a suite
+  list [options]             List eval runs
+  get <runId>                Get eval run details by ID
+  results [options] <runId>  Show sample results for an eval run
+  cancel [options] <runId>   Cancel a running eval
+  scorecard <runId>          Show scorecard for a completed eval run
+  help [command]             display help for command

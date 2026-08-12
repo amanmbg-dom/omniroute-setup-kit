@@ -1,0 +1,19 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute batches [options] [command]
+
+Manage OpenAI-compatible batch jobs
+
+Options:
+  -h, --help                  display help for command
+
+Commands:
+  list [options]
+  get <batchId>
+  create [options]            Create a batch job
+  submit [options]            Upload JSONL file and create batch
+  cancel [options] <batchId>
+  wait [options] <batchId>
+  output [options] <batchId>
+  errors [options] <batchId>
+  help [command]              display help for command

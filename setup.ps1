@@ -26,6 +26,12 @@
 .PARAMETER SkipClaudeCode
   Skip wiring Claude Code (ANTHROPIC_* env) to the gateway.
 
+.PARAMETER SkipBridge
+  Skip installing the Google Flow image bridge (gemini_webapi venv + gflow registration).
+
+.PARAMETER SkipFlowBridge
+  Skip installing the flowui bridge (Google Flow via real Chrome session + flowui registration).
+
 .PARAMETER SkipAutoStart
   Skip registering the login auto-start launcher.
 
@@ -38,6 +44,8 @@ param(
     [switch]$SkipProviders,
     [switch]$SkipExtension,
     [switch]$SkipClaudeCode,
+    [switch]$SkipBridge,
+    [switch]$SkipFlowBridge,
     [switch]$SkipAutoStart
 )
 
@@ -74,6 +82,7 @@ $Port = if ($cfg.OMNIROUTE_PORT) { $cfg.OMNIROUTE_PORT } else { '20128' }
 $Pass = if ($cfg.DASHBOARD_PASSWORD) { $cfg.DASHBOARD_PASSWORD } else { 'CHANGEME' }
 $NimKey = $cfg.NVIDIA_NIM_API_KEY
 $ZenKey = $cfg.OPENCODE_ZEN_API_KEY
+$GemKey = $cfg.GEMINI_API_KEY
 $Base   = "http://127.0.0.1:$Port"
 
 # ---------- 2. node ----------
@@ -184,7 +193,7 @@ Write-Ok 'dashboard login OK'
 
 # ---------- 7. providers ----------
 if (-not $SkipProviders) {
-    Write-Step 'Adding free providers (NVIDIA NIM + OpenCode Zen)'
+    Write-Step 'Adding free providers (NVIDIA NIM + OpenCode Zen + Google Gemini)'
     # GET /api/providers returns { connections: [...], total: N }
     $provResp = Invoke-RestMethod -WebSession $sess -Uri "$Base/api/providers" -TimeoutSec 10
     if ($provResp -is [System.Array]) { $conns = @($provResp) }
@@ -193,7 +202,8 @@ if (-not $SkipProviders) {
 
     $specs = @(
         @{ id = 'nvidia';       key = $NimKey; name = 'NVIDIA NIM' },
-        @{ id = 'opencode-zen'; key = $ZenKey; name = 'OpenCode Zen' }
+        @{ id = 'opencode-zen'; key = $ZenKey; name = 'OpenCode Zen' },
+        @{ id = 'gemini';       key = $GemKey; name = 'Google Gemini' }
     )
     foreach ($sp in $specs) {
         if (-not $sp.key) { Write-Skip "$($sp.name): no key in config/local.env - skipped"; continue }
@@ -270,6 +280,89 @@ export const DEFAULT_API_KEY = '$token';
     Write-Ok "extension -> $extDst (fresh per-machine admin token minted)"
 }
 
+# ---------- 8b. google flow bridge (free Nano Banana via session token) ----------
+if (-not $SkipBridge) {
+    Write-Step 'Installing the Google Flow image bridge (gflow/nano-banana-2)'
+    $bridgeDir = Join-Path $KitRoot 'bridge\gemini-bridge'
+    $venvPy = Join-Path $bridgeDir '.venv\Scripts\python.exe'
+    $bridgeOk = $true
+
+    if (-not (Test-Path $venvPy)) {
+        Write-Host '    creating Python venv + installing gemini_webapi (one-time download)...'
+        & python -m venv (Join-Path $bridgeDir '.venv')
+        if ($LASTEXITCODE -ne 0) { Write-Warn 'venv creation failed - bridge skipped'; $bridgeOk = $false }
+        else {
+            & $venvPy -m pip install --quiet --disable-pip-version-check -r (Join-Path $bridgeDir 'requirements.txt')
+            if ($LASTEXITCODE -ne 0) { Write-Warn 'pip install failed - bridge skipped'; $bridgeOk = $false }
+        }
+    } else {
+        Write-Ok 'venv already present'
+    }
+
+    if ($bridgeOk) {
+        & node (Join-Path $bridgeDir 'register-gflow.mjs')
+        if ($LASTEXITCODE -eq 0) { Write-Ok 'gflow registered -> model gflow/nano-banana-2' }
+        else { Write-Warn 'gflow registration failed - bridge skipped'; $bridgeOk = $false }
+    }
+    if ($bridgeOk) {
+        Write-Ok 'bridge ready. Start it with: bridge\gemini-bridge\start-bridge.cmd'
+        Write-Host "    then push your google.com session once (Cookie Pusher -> Grab & push sessions with gemini.google.com signed in)." -ForegroundColor DarkGray
+    }
+}
+
+# ---------- 8c. flowui bridge (Google Flow via real Chrome session) ----------
+if (-not $SkipFlowBridge) {
+    Write-Step 'Installing the flowui bridge (Google Flow in Chrome, flowui/nano-banana-2)'
+    $flowDir = Join-Path $KitRoot 'bridge\flow-browser'
+    $flowOk = $true
+
+    if (-not (Test-Path (Join-Path $flowDir 'node_modules\playwright'))) {
+        Write-Host '    npm install (playwright + mcp sdk, one-time download)...'
+        Push-Location $flowDir
+        & npm install --omit=dev
+        Pop-Location
+        if ($LASTEXITCODE -ne 0) { Write-Warn 'npm install failed - flowui bridge skipped'; $flowOk = $false }
+    } else {
+        Write-Ok 'node_modules already present'
+    }
+
+    if ($flowOk -and -not (Test-Path (Join-Path $flowDir 'config\flow.config.json'))) {
+        # Copy the example and point it at this machine's Chrome install.
+        $example = Join-Path $flowDir 'config\flow.config.example.json'
+        if (Test-Path $example) {
+            Copy-Item $example (Join-Path $flowDir 'config\flow.config.json')
+            Write-Host "    created config\flow.config.json - edit chromePath / expectedAccount if needed." -ForegroundColor DarkGray
+        }
+    }
+
+    if ($flowOk) {
+        & node (Join-Path $flowDir 'register-flowui.mjs')
+        if ($LASTEXITCODE -eq 0) { Write-Ok 'flowui registered -> model flowui/nano-banana-2' }
+        else { Write-Warn 'flowui registration failed - bridge skipped'; $flowOk = $false }
+    }
+    if ($flowOk) {
+        Write-Ok 'bridge ready. Start it with: bridge\flow-browser\start-flow-browser.cmd'
+        Write-Host '    headless by default - your signed-in profile (~\.flow-browser-profile) is reused.' -ForegroundColor DarkGray
+        Write-Host '    if the session expires, run: bridge\flow-browser\re-sign-in.cmd' -ForegroundColor DarkGray
+
+        # Register the flowui MCP server in Claude Code so EVERY image request
+        # funnels through generate_image -> the same bridge (consistent quality).
+        $claude = Get-Command claude -ErrorAction SilentlyContinue
+        if ($claude) {
+            & claude mcp remove flowui 2>$null | Out-Null
+            & claude mcp add -s user flowui -- node (Join-Path $flowDir 'flowui-mcp.mjs')
+            if ($LASTEXITCODE -eq 0) { Write-Ok 'flowui MCP server registered in Claude Code (tool: generate_image)' }
+            else { Write-Warn 'claude mcp add failed - MCP server not registered; the skill still works via curl fallback' }
+        } else {
+            Write-Warn 'claude CLI not found - flowui MCP server not registered'
+            Write-Host "    register later with: claude mcp add -s user flowui -- node <kit>\bridge\flow-browser\flowui-mcp.mjs" -ForegroundColor DarkGray
+        }
+    }
+}
+
+# flow bridge state for the auto-start step below
+$flowBridgeOk = (-not $SkipFlowBridge) -and $flowOk
+
 # ---------- 9. Claude Code ----------
 if (-not $SkipClaudeCode) {
     Write-Step 'Wiring Claude Code to the gateway'
@@ -292,6 +385,10 @@ if (-not $SkipClaudeCode) {
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY' -NotePropertyValue '1' -Force
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT' -NotePropertyValue '1' -Force
 
+    # Only 'auto' shows in the /model picker (gateway-discovered models are
+    # filtered by this allowlist). Add more ids here to expose them again.
+    $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue @('auto') -Force
+
     $prev = Get-Content $ccFile -Raw -ErrorAction SilentlyContinue
     $json = $cc | ConvertTo-Json -Depth 12
     if ($prev -and $prev.Trim() -ne $json.Trim()) {
@@ -300,6 +397,24 @@ if (-not $SkipClaudeCode) {
     [System.IO.File]::WriteAllText($ccFile, $json, (New-Object System.Text.UTF8Encoding($false)))
     Write-Ok '~/.claude/settings.json -> ANTHROPIC_BASE_URL/AUTH_TOKEN/MODEL wired to the gateway'
     Write-Ok '   (existing permissions/hooks preserved; original backed up to settings.json.bak-kit)'
+
+    # Ship the kit's skills (single-page-site, ...) to ~/.claude/skills.
+    # Only copies folders that are not already installed, so local
+    # customizations are never clobbered by re-runs.
+    $skillsSrc = Join-Path $PSScriptRoot 'skills'
+    $skillsDst = Join-Path $ccDir 'skills'
+    if (Test-Path $skillsSrc) {
+        New-Item -ItemType Directory -Force -Path $skillsDst | Out-Null
+        $installed = 0
+        foreach ($skillDir in Get-ChildItem $skillsSrc -Directory) {
+            $dstSkill = Join-Path $skillsDst $skillDir.Name
+            if (-not (Test-Path (Join-Path $dstSkill 'SKILL.md'))) {
+                Copy-Item $skillDir.FullName $dstSkill -Recurse -Force
+                $installed++
+            }
+        }
+        Write-Ok "$installed kit skill(s) installed to ~/.claude/skills (skipped existing)"
+    }
 }
 
 # ---------- 10. auto-start ----------
@@ -309,6 +424,10 @@ if (-not $SkipAutoStart) {
     if (Test-Path $startup) {
         Copy-Item $launcherSrc (Join-Path $startup 'OmniRoute.cmd') -Force
         Write-Ok 'OmniRoute.cmd -> Startup folder (gateway starts at login)'
+        if ($flowBridgeOk) {
+            Copy-Item (Join-Path $flowDir 'start-flow-browser.cmd') (Join-Path $startup 'FlowUI-Bridge.cmd') -Force
+            Write-Ok 'FlowUI-Bridge.cmd -> Startup folder (flowui image bridge starts at login, headless)'
+        }
     } else {
         Write-Warn 'Startup folder not found - skipping auto-start'
     }
@@ -323,6 +442,10 @@ Write-Host "  Gateway   : $Base          (auto-starts at login)"
 Write-Host "  Dashboard : $Base/admin    (password from config/local.env - change it!)"
 Write-Host "  Extension : $HOME\omniroute-cookie-pusher"
 if (-not $SkipClaudeCode) { Write-Host "  Claude Code: wired (run 'claude' - model 'auto', list all with /model)" }
+if ($flowBridgeOk) {
+    Write-Host '  Flow images : flowui/nano-banana-2 via bridge\flow-browser\start-flow-browser.cmd (headless, auto-starts)'
+    Write-Host '                image requests route through the generate_image MCP tool -> same engine, same quality'
+}
 Write-Host ''
 Write-Host '  Last step, once, ~1 minute:' -ForegroundColor Yellow
 Write-Host "    1. Open edge://extensions (or chrome://extensions)"

@@ -1,0 +1,9 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute restart [options]
+
+Restart the OmniRoute server
+
+Options:
+  --port <port>  Port to listen on (default: 20128) (default: "20128")
+  -h, --help     display help for command

@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute resilience [options] [command]
+
+Inspect and manage resilience mechanisms
+
+Options:
+  -h, --help           display help for command
+
+Commands:
+  status [options]
+  breakers [options]
+  cooldowns [options]
+  lockouts [options]
+  reset [options]      Reset breaker/cooldown state
+  profile              Manage resilience profile
+  config               Manage resilience config
+  help [command]       display help for command

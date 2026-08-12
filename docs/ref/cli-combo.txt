@@ -1,0 +1,16 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute combo [options] [command]
+
+Combos
+
+Options:
+  -h, --help               display help for command
+
+Commands:
+  list [options]           List configured routing combos
+  switch <name>            Activate a routing combo
+  create [options] <name>  Create a new routing combo
+  delete [options] <name>  Delete a routing combo
+  suggest [options]        Suggest the best combo for a task using AI scoring
+  help [command]           display help for command

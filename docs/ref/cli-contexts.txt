@@ -1,0 +1,21 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute contexts|context [options] [command]
+
+Manage server contexts/profiles (add, use, list, show, remove, rename, export,
+import)
+
+Options:
+  -h, --help               display help for command
+
+Commands:
+  list                     List all contexts
+  add [options] <name>     Add a new context
+  use <name>               Switch active context
+  current [options]        Show the active context (server, auth, scope)
+  show <name>              Show context details
+  remove [options] <name>  Remove a context
+  rename <old> <new>       Rename a context
+  export [options]         Export contexts to JSON
+  import [options] <file>  Import contexts from a JSON file
+  help [command]           display help for command

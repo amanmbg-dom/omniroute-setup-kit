@@ -1,0 +1,9 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute open [options] [resource] [id]
+
+Open a specific OmniRoute dashboard page in the browser
+
+Options:
+  --url       Print URL only, do not open browser
+  -h, --help  display help for command

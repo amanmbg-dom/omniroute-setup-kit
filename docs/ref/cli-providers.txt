@@ -1,0 +1,20 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute providers [options] [command]
+
+Providers
+
+Options:
+  -h, --help                                display help for command
+
+Commands:
+  available [options]                       Show available providers in the OmniRoute catalog
+  list [options]                            List configured provider connections
+  test [options] <idOrName>                 Test a configured provider connection
+  test-all [options]                        Test all active provider connections
+  validate [options]                        Validate local provider configuration without calling upstream
+  rotate [options] <idOrName>               Rotate the upstream API key for a provider connection
+  status [options]                          Show key health for all provider connections (age, expiry, cooldown)
+  metrics [options]                         Show provider performance metrics (latency, success rate, cost)
+  metric [options] <connectionId> <metric>  Get a single metric value for a specific connection
+  help [command]                            display help for command

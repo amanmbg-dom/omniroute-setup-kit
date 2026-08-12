@@ -1,0 +1,16 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute openapi [options] [command]
+
+Access and test the OmniRoute OpenAPI spec
+
+Options:
+  -h, --help            display help for command
+
+Commands:
+  dump [options]        Dump OpenAPI spec to stdout or file
+  validate              Validate the OpenAPI spec
+  try [options] <path>  Test an API endpoint via the spec
+  endpoints [options]   List all API endpoints
+  paths                 List all API paths
+  help [command]        display help for command

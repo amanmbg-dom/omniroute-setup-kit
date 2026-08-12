@@ -1,0 +1,21 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute chat [options] [prompt]
+
+Send a one-shot chat prompt to OmniRoute
+
+Options:
+  --file <path>               Read prompt from file
+  --stdin                     Read prompt from stdin
+  -s, --system <prompt>       System prompt
+  -m, --model <id>            Model ID (default: auto) (default: "auto")
+  --max-tokens <n>            Maximum tokens in response
+  --temperature <t>           Sampling temperature (0–2)
+  --top-p <p>                 Top-p nucleus sampling
+  --reasoning-effort <level>  Reasoning effort level (low|medium|high)
+  --thinking-budget <tokens>  Extended thinking token budget
+  --combo <name>              Force a specific combo by name
+  --responses-api             Use /v1/responses instead of /v1/chat/completions
+  --stream                    Stream response incrementally
+  --no-history                Do not save to ~/.omniroute/cli-history.jsonl
+  -h, --help                  display help for command

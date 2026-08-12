@@ -1,0 +1,12 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute configure [options] <cli>
+
+Pick a provider+model from the active server and write a local CLI config
+
+Options:
+  --provider <id>     Provider id (skips the interactive provider prompt)
+  --model <id>        Model id (skips the interactive model prompt)
+  --name <name>       Profile name to write (default: derived from model)
+  --codex-home <dir>  Codex home dir (default: ~/.codex)
+  -h, --help          display help for command

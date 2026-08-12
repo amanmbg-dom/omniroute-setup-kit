@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute webhooks [options] [command]
+
+Manage OmniRoute webhooks
+
+Options:
+  -h, --help             display help for command
+
+Commands:
+  events                 List all available webhook event types
+  list                   List configured webhooks
+  get <id>               Get webhook details by ID
+  add [options]          Register a new webhook
+  update [options] <id>  Update an existing webhook
+  remove [options] <id>  Delete a webhook
+  test [options] <id>    Send a test event to a webhook
+  help [command]         display help for command

@@ -1,0 +1,17 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute tags [options] [command]
+
+Manage resource tags
+
+Options:
+  -h, --help             display help for command
+
+Commands:
+  list
+  add [options] <name>
+  remove [options] <id>
+  assign [options]
+  unassign [options]
+  resources <tagName>
+  help [command]         display help for command

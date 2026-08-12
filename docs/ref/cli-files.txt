@@ -1,0 +1,16 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute files [options] [command]
+
+Manage files (upload, list, get, download, delete)
+
+Options:
+  -h, --help                  display help for command
+
+Commands:
+  list [options]
+  get <fileId>                Get file metadata
+  upload [options] <path>     Upload a file
+  content [options] <fileId>  Download file content
+  delete [options] <fileId>
+  help [command]              display help for command

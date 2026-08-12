@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute memory [options] [command]
+
+Manage OmniRoute conversational memory (FTS5 + vector)
+
+Options:
+  -h, --help                display help for command
+
+Commands:
+  search [options] <query>  Search memory entries by semantic query
+  add [options]             Add a new memory entry
+  clear [options]           Delete memory entries matching filters
+  list [options]            List memory entries without search ranking
+  get <id>                  Get a single memory entry by ID
+  delete [options] <id>     Delete a memory entry by ID
+  health                    Show memory subsystem health (FTS5 + Qdrant)
+  help [command]            display help for command

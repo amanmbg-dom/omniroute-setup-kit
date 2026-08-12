@@ -1,0 +1,21 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute skills [options] [command]
+
+Manage OmniRoute skills (sandbox, builtin, custom, hybrid, skillssh)
+
+Options:
+  -h, --help              display help for command
+
+Commands:
+  list [options]          List installed skills
+  get <id>                Get details for a skill by ID
+  install [options]       Install a skill from file or URL
+  enable <id>             Enable a skill by ID
+  disable [options] <id>  Disable a skill by ID
+  delete [options] <id>   Delete a skill by ID
+  execute [options] <id>  Execute a skill by ID
+  executions [options]    List skill execution history
+  skillssh                Manage skills installed via SSH
+  marketplace             Browse and install skills from the marketplace
+  help [command]          display help for command

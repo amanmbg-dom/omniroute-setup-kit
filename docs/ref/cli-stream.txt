@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute stream [options] [prompt]
+
+Stream a chat response with SSE inspection modes
+
+Options:
+  --file <path>          Read prompt from file
+  --stdin                Read prompt from stdin
+  -m, --model <id>       Model ID (default: auto) (default: "auto")
+  -s, --system <prompt>  System prompt
+  --combo <name>         Force a specific combo by name
+  --max-tokens <n>       Maximum tokens in response
+  --responses-api        Use /v1/responses instead of /v1/chat/completions
+  --raw                  Print raw SSE lines as received
+  --debug                Print per-chunk timing info to stderr
+  --save <path>          Save all SSE events to a .jsonl file
+  -h, --help             display help for command

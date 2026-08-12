@@ -1,0 +1,15 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute cloud [options] [command]
+
+Manage cloud AI agent tasks (codex, devin, jules)
+
+Options:
+  -h, --help      display help for command
+
+Commands:
+  agents          List available cloud agents
+  codex           Manage codex cloud agent tasks
+  devin           Manage devin cloud agent tasks
+  jules           Manage jules cloud agent tasks
+  help [command]  display help for command

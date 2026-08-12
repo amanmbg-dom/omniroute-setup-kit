@@ -1,0 +1,15 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute update [options]
+
+Checking for updates...
+
+Options:
+  --check      Check for available update — exit 0 if up-to-date, exit 1 if
+               outdated
+  --apply      Install latest version automatically (npm install -g)
+  --changelog  Show changelog for the latest release
+  --dry-run    Show what would be updated without applying
+  --no-backup  Skip backup creation
+  --yes        Skip confirmation prompt
+  -h, --help   display help for command

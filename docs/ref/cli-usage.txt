@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute usage [options] [command]
+
+Usage analytics, budgets, quotas, and logs
+
+Options:
+  -h, --help             display help for command
+
+Commands:
+  analytics [options]    Show aggregated usage analytics
+  budget                 Manage cost budgets
+  quota [options]        Show provider quota usage
+  logs [options]         Show request call logs
+  utilization [options]  Show API key utilization metrics
+  history [options]      Show request history
+  proxy-logs [options]   Show proxy-level request logs
+  help [command]         display help for command

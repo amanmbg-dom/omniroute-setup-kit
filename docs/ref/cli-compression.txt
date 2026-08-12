@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute compression [options] [command]
+
+Configure and inspect the OmniRoute compression pipeline
+
+Options:
+  -h, --help           display help for command
+
+Commands:
+  status               Show current compression status and settings
+  configure [options]  Configure compression settings
+  engine               Get or set the active compression engine
+  combos               Manage compression combo statistics
+  rules                Manage compression rules
+  language-packs       List available compression language packs
+  preview [options]    Preview compression effect on a request
+  help [command]       display help for command

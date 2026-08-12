@@ -1,0 +1,22 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute setup [options] [command]
+
+OmniRoute Setup
+
+Options:
+  --password <value>         Set admin password
+  --add-provider             Add an API-key provider connection
+  --provider <id>            Provider id, for example openai or anthropic
+  --provider-name <name>     Display name for the connection
+  --api-key <value>          Provider API key
+  --default-model <model>    Optional default model
+  --provider-base-url <url>  Optional OpenAI-compatible base URL override
+  --test-provider            Test the provider after saving it
+  --non-interactive          Read all inputs from flags/env and do not prompt
+  --list                     List all supported CLI tools
+  -h, --help                 display help for command
+
+Commands:
+  opencode [options]         Install and configure the bundled
+                             @omniroute/opencode-plugin for OpenCode

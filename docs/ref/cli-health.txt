@@ -1,0 +1,15 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute health [options] [command]
+
+Check server health and component status
+
+Options:
+  -v, --verbose         Show extended info (memory, breakers)
+  --json                Output as JSON
+  --alerts-only         Show only components with alerts
+  -h, --help            display help for command
+
+Commands:
+  components [options]  List health components and their status
+  watch [options]       Live dashboard — refresh every N seconds

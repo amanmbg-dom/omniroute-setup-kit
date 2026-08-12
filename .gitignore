@@ -6,3 +6,11 @@ logs/
 db_backups/
 node_modules/
 *.log
+
+# flowui bridge - machine-specific + runtime artifacts
+bridge/flow-browser/config/flow.config.json
+bridge/flow-browser/logs/
+bridge/flow-browser/outputs/
+bridge/flow-browser/screenshots-debug/
+bridge/flow-browser/.flow-projects.json
+__pycache__/

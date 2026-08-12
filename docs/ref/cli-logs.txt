@@ -1,0 +1,20 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute logs [options]
+
+Stream or export request logs
+
+Options:
+  --follow             Stream logs in real-time
+  --filter <level>     Filter by level (error,warn,info) — comma-separated
+  --lines <n>          Number of lines to fetch (default: "100")
+  --timeout <ms>       Connection timeout in ms (default: "30000")
+  --base-url <url>     OmniRoute API base URL
+  --request-id <id>    Filter by request ID
+  --api-key <key>      Filter by API key
+  --combo <name>       Filter by combo name
+  --status <code>      Filter by HTTP status code
+  --duration-min <ms>  Min request duration in ms
+  --duration-max <ms>  Max request duration in ms
+  --export <path>      Save logs to file (json/jsonl/csv)
+  -h, --help           display help for command

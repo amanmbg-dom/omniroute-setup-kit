@@ -1,0 +1,18 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute tunnel [options] [command]
+
+Tunnels
+
+Options:
+  -h, --help               display help for command
+
+Commands:
+  list [options]           List active tunnels
+  create [type] [type]     Create a tunnel
+  stop [options] <type>    Stop a tunnel
+  status [options] <type>  Show detailed status of a tunnel
+  logs [options] <type>    Show logs for a tunnel
+  info [options] <type>    Show configuration details of a tunnel
+  rotate [options] <type>  Generate a new tunnel URL
+  help [command]           display help for command

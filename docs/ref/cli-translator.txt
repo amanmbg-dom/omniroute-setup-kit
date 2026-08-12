@@ -1,0 +1,16 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute translator|translate [options] [command]
+
+Translate request bodies between LLM formats
+
+Options:
+  -h, --help           display help for command
+
+Commands:
+  detect [options]     Detect body format
+  translate [options]  Convert body from one format to another
+  send [options]       Translate and dispatch upstream
+  stream [options]     Stream-translate a request body
+  history [options]
+  help [command]       display help for command

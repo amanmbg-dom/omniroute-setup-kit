@@ -1,0 +1,13 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute telemetry [options] [command]
+
+Access aggregated telemetry data
+
+Options:
+  -h, --help         display help for command
+
+Commands:
+  summary [options]  Show aggregated telemetry summary
+  export [options]   Export telemetry events to JSONL
+  help [command]     display help for command

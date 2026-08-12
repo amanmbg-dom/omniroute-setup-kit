@@ -1,0 +1,15 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute tokens [options] [command]
+
+Manage scoped CLI access tokens (remote mode)
+
+Options:
+  -h, --help           display help for command
+
+Commands:
+  create [options]     Create a new access token (requires admin scope)
+  list                 List access tokens (masked)
+  revoke <idOrPrefix>  Revoke an access token by id or display prefix
+  scopes               Explain the three access-token scopes
+  help [command]       display help for command

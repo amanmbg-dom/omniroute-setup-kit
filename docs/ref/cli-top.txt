@@ -1,0 +1,102 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute [options] [command]
+
+OmniRoute — Smart AI Router with Auto Fallback
+
+Options:
+  -v, --version                          Print version and exit
+  --output <format>                      Output format (table, json, jsonl, csv) (choices: "table", "json", "jsonl", "csv", default: "table")
+  -q, --quiet                            Suppress non-essential output
+  --no-color                             Disable colored output
+  --timeout <ms>                         HTTP request timeout in milliseconds (default: "30000")
+  --api-key <key>                        API key for OmniRoute server (env: OMNIROUTE_API_KEY)
+  --base-url <url>                       OmniRoute server base URL (env: OMNIROUTE_BASE_URL)
+  --context <name>                       Server context/profile to use for this command (env: OMNIROUTE_CONTEXT)
+  --lang <code>                          Set CLI display language (overrides OMNIROUTE_LANG)
+  -h, --help                             display help for command
+
+Commands:
+  memory                                 Manage OmniRoute conversational memory (FTS5 + vector)
+  skills                                 Manage OmniRoute skills (sandbox, builtin, custom, hybrid, skillssh)
+  audit                                  Access compliance and MCP audit logs
+  oauth                                  Manage OAuth provider connections
+  login                                  Local OAuth helpers for remote OmniRoute installs (run on your own machine)
+  cloud                                  Manage cloud AI agent tasks (codex, devin, jules)
+  eval                                   Manage eval suites and runs
+  webhooks                               Manage OmniRoute webhooks
+  policy                                 Manage OmniRoute authorization policies
+  compression                            Configure and inspect the OmniRoute compression pipeline
+  files                                  Manage files (upload, list, get, download, delete)
+  batches                                Manage OpenAI-compatible batch jobs
+  translator|translate                   Translate request bodies between LLM formats
+  pricing                                Manage pricing data for models
+  resilience                             Inspect and manage resilience mechanisms
+  nodes|provider-nodes                   Manage provider nodes (endpoints)
+  sync                                   Sync configuration between OmniRoute instances
+  context-eng|ctx                        Configure context engineering pipeline (Caveman, RTK)
+  sessions                               Inspect and manage active sessions
+  tags                                   Manage resource tags
+  openapi                                Access and test the OmniRoute OpenAPI spec
+  oneproxy                               Manage the OneProxy upstream pool
+  telemetry                              Access aggregated telemetry data
+  open [options] [resource] [id]         Open a specific OmniRoute dashboard page in the browser
+  chat [options] [prompt]                Send a one-shot chat prompt to OmniRoute
+  stream [options] [prompt]              Stream a chat response with SSE inspection modes
+  simulate [options] [prompt]            Dry-run routing simulation — show which providers would be selected without calling upstream
+  cost [options]                         Show cost report with breakdown by provider, model, combo, or API key
+  usage                                  Usage analytics, budgets, quotas, and logs
+  serve [options]                        Start the OmniRoute server (default action)
+  stop                                   Stop the OmniRoute server
+  restart [options]                      Restart the OmniRoute server
+  dashboard [options]                    Open the OmniRoute dashboard in a browser
+  doctor [options]                       OmniRoute Doctor
+  setup [options]                        OmniRoute Setup
+  providers                              Providers
+  provider [subcommand]                  Manage provider connections (use 'providers' for the full interface)
+  config                                 Show or update CLI tool configuration
+  keys                                   API Keys
+  auth [options] <export>                Export DECRYPTED provider credentials (local-only, plaintext output)
+  models [options] [provider]            List available models (requires server)
+  combo                                  Combos
+  status [options]                       Show OmniRoute status dashboard
+  logs [options]                         Stream or export request logs
+  update [options]                       Checking for updates...
+  backup                                 Create a backup of OmniRoute data
+  restore [options] [backupId]           Restore from a backup
+  health [options]                       Check server health and component status
+  quota [options]                        Show provider quota usage
+  cache                                  Manage response cache
+  redis                                  Launch a 1-click local Redis container (Podman or Docker) for OmniRoute caching and quota tracking
+  mcp                                    MCP Server
+  a2a                                    Agent-to-Agent (A2A) server
+  tunnel                                 Tunnels
+  env                                    Show and manage environment variables
+  test [options] [provider] [model]      Test a provider connection
+  completion                             Generate or install shell completion scripts
+  runtime                                Manage native runtime dependencies
+  repair [options]                       Repair native deps (alias for `runtime repair`)
+  tray                                   Control the system tray icon
+  autostart                              Manage OmniRoute autostart at boot (Linux: systemd user service)
+  repl [options]                         Interactive multi-turn REPL with LLM
+  launch [options] [claudeArgs...]       Launch Claude Code pointed at OmniRoute (local or remote, with --profile)
+  launch-codex [options] [codexArgs...]  Launch Codex CLI pointed at OmniRoute (local or remote VPS)
+  setup-codex [options]                  Fetch the live model catalog from OmniRoute (local or remote VPS) and generate ~/.codex/<name>.config.toml profiles for each supported model
+  setup-claude [options]                 Fetch the live model catalog from OmniRoute (local or remote VPS) and generate ~/.claude/profiles/<name>/ Claude Code profiles (CLAUDE_CONFIG_DIR) for each model
+  setup-opencode [options]               Generate the OmniRoute openai-compatible provider in ~/.config/opencode/opencode.json from the live model catalog (local or remote VPS)
+  setup-cline [options]                  Configure Cline for OmniRoute: write ~/.cline/data (CLI mode) + print VS Code extension settings
+  setup-kilo [options]                   Configure Kilo Code for OmniRoute: write ~/.local/share/kilo/auth.json (CLI) + VS Code kilocode.* settings
+  setup-continue [options]               Generate ~/.continue/config.yaml (Continue / cn CLI) from the OmniRoute model catalog
+  setup-cursor [options]                 Print the steps to point Cursor at OmniRoute (chat panel; Cursor config is not file-writable)
+  setup-roo [options]                    Configure Roo Code for OmniRoute: write a Roo import JSON + autoImport pointer + print UI steps
+  setup-crush [options]                  Generate the OmniRoute openai-compat provider in ~/.config/crush/crush.json
+  setup-goose [options]                  Configure Goose for OmniRoute: write ~/.config/goose/config.yaml + print the env recipe
+  setup-aider [options]                  Configure Aider for OmniRoute: write ~/.aider.conf.yml + print the env recipe
+  setup-qwen [options]                   Configure Qwen Code's upstream V4 modelProviders format for OmniRoute
+  connect [options] <host>               Connect to a remote OmniRoute server and enter remote mode
+  contexts|context                       Manage server contexts/profiles (add, use, list, show, remove, rename, export, import)
+  tokens                                 Manage scoped CLI access tokens (remote mode)
+  configure [options] <cli>              Pick a provider+model from the active server and write a local CLI config
+  api                                    Direct REST API access (generated from OpenAPI spec)
+  plugin                                 Manage CLI plugins (omniroute-cmd-*)
+  help [command]                         display help for command

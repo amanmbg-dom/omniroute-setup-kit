@@ -1,0 +1,13 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute connect [options] <host>
+
+Connect to a remote OmniRoute server and enter remote mode
+
+Options:
+  --port <port>    Server port when the host has none (default: "20128")
+  --key <token>    Use a pre-generated scoped access token (skips the password
+                   prompt)
+  --name <name>    Context name to save (default: derived from host)
+  --scope <scope>  Requested scope for the password flow (read|write|admin)
+  -h, --help       display help for command

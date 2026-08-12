@@ -1,0 +1,16 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute pricing [options] [command]
+
+Manage pricing data for models
+
+Options:
+  -h, --help      display help for command
+
+Commands:
+  sync [options]  Sync prices from upstream sources
+  list [options]
+  get <model>
+  defaults        Manage default pricing
+  diff [options]  Show divergence from upstream prices
+  help [command]  display help for command

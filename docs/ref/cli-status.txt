@@ -1,0 +1,9 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute status [options]
+
+Show OmniRoute status dashboard
+
+Options:
+  -v, --verbose  Show additional details
+  -h, --help     display help for command

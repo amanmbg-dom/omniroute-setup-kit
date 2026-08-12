@@ -1,0 +1,19 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute policy [options] [command]
+
+Manage OmniRoute authorization policies
+
+Options:
+  -h, --help               display help for command
+
+Commands:
+  list [options]           List policies
+  get <id>                 Get policy details by ID
+  create [options]         Create a policy from a JSON file
+  update [options] <id>    Update a policy from a JSON file
+  delete [options] <id>    Delete a policy by ID
+  evaluate [options]       Dry-run policy evaluation (exit 0=allowed, 4=denied)
+  export <file>            Export all policies to a JSON file
+  import [options] <file>  Import policies from a JSON file
+  help [command]           display help for command

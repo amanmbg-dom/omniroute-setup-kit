@@ -1,0 +1,14 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute env [options] [command]
+
+Show and manage environment variables
+
+Options:
+  -h, --help           display help for command
+
+Commands:
+  show|list [options]  Show current environment variables
+  get <key>            Get a single environment variable
+  set <key> <value>    Set an environment variable (current session only)
+  help [command]       display help for command

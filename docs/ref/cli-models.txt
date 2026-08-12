@@ -1,0 +1,10 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute models [options] [provider]
+
+List available models (requires server)
+
+Options:
+  --search <query>  Filter models by id, name, provider, or description
+  --json            Output as JSON
+  -h, --help        display help for command

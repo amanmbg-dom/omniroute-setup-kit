@@ -1,0 +1,16 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute sessions [options] [command]
+
+Inspect and manage active sessions
+
+Options:
+  -h, --help                    display help for command
+
+Commands:
+  list [options]
+  show <sessionId>
+  expire [options] <sessionId>
+  expire-all [options]
+  current
+  help [command]                display help for command

@@ -1,0 +1,21 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute serve [options]
+
+Start the OmniRoute server (default action)
+
+Options:
+  --port <port>       Port to listen on (default: 20128)
+  --no-open           Do not open browser automatically
+  --daemon            Run server as a background daemon
+  --log               Show server logs inline
+  --no-recovery       Disable auto-restart on crash (debugging mode)
+  --max-restarts <n>  Max crash restarts within 30s before giving up (default:
+                      2) (default: 2)
+  --tray              Show system tray icon (desktop only, opt-in)
+  --no-tray           Disable system tray icon
+  --tls-cert <path>   Path to a TLS certificate (PEM) to serve HTTPS (also
+                      OMNIROUTE_TLS_CERT)
+  --tls-key <path>    Path to the TLS private key (PEM) to serve HTTPS (also
+                      OMNIROUTE_TLS_KEY)
+  -h, --help          display help for command

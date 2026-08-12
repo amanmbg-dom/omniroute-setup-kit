@@ -1,0 +1,15 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute oauth [options] [command]
+
+Manage OAuth provider connections
+
+Options:
+  -h, --help        display help for command
+
+Commands:
+  providers         List OAuth-capable providers and their flow types
+  start [options]   Start OAuth authorization flow for a provider
+  status [options]  List active OAuth connections
+  revoke [options]  Revoke an OAuth connection
+  help [command]    display help for command

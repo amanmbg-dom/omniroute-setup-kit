@@ -1,0 +1,8 @@
+  [2m📋 Loaded env from C:\Users\Work\.omniroute\.env[0m
+  [2m📋 Loaded env from C:\Users\Work\AppData\Roaming\npm\node_modules\omniroute\.env[0m
+Usage: omniroute stop [options]
+
+Stop the OmniRoute server
+
+Options:
+  -h, --help  display help for command
