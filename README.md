@@ -32,16 +32,27 @@ machine: `git clone <url>` → run `setup.ps1`. (If you'd rather host it
 somewhere else — GitLab, Gitea, a USB stick — the kit is just a folder; copy
 it and run `setup.ps1` from there.)
 
-## Quick start
+## One command — any new Windows device
 
-```powershell
-git clone <this-repo-url> omniroute-kit
-cd omniroute-kit
-powershell -ExecutionPolicy Bypass -File setup.ps1
+```bash
+git clone https://github.com/amanmbg-dom/omniroute-setup-kit.git omniroute-kit && cd omniroute-kit && powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-That's it. The script is **idempotent** — safe to re-run any time; it skips
-what's already configured.
+That's it — one line, end to end. Or copy the folder onto the machine (USB,
+zip, whatever) and double-click **`install.cmd`**. The script is **idempotent**
+— safe to re-run any time; it skips what's already configured. The only
+downloads are OmniRoute itself (npm) and the flowui bridge's Playwright;
+everything else ships in the repo.
+
+After setup, two one-time manual steps (about 1 minute):
+
+1. **Cookie Pusher** — `edge://extensions` → Developer mode → Load unpacked →
+   `%USERPROFILE%\omniroute-cookie-pusher` → click the extension → Grab & push
+   sessions (for the free web-cookie providers)
+2. **AI images** — `bridge\flow-browser\re-sign-in.cmd` once, sign in to
+   Google in the Chrome window that opens (Flow Automation profile). After
+   that, `flowui/nano-banana-2` works headless forever, and the `/images`
+   command in Claude Code queues a full site's image batch with one prompt.
 
 ### After the script (once, ~1 minute)
 
