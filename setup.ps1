@@ -166,6 +166,11 @@ if (Test-Path $cycleSrc) {
         Copy-Item -Recurse -Force $vpsSrc (Join-Path $omHome 'vps')
         Write-Ok 'vps/ -> ~\.omniroute\vps\ (setup-vps.sh + session helpers)'
     }
+    # Ship + run the picker-cache seeder so /model shows all auto/ routes.
+    $seedLive = Join-Path $omHome 'fix-model-cache.ps1'
+    Copy-Item (Join-Path $KitRoot 'fix-model-cache.ps1') $seedLive -Force
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $seedLive -Base "http://localhost:$Port" 2>&1 | ForEach-Object { Write-Ok $_ }
+
     foreach ($c in @('omni-remote.ps1', 'omni-local.ps1')) {
         $s = Join-Path $KitRoot $c
         if (Test-Path $s) {
@@ -457,16 +462,17 @@ if (-not $SkipClaudeCode) {
     $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue $autoRoutes -Force
     Write-Ok "availableModels -> $($autoRoutes.Count) auto routes in the /model picker"
 
-    # Claude Code caches the gateway model catalog in ~/.claude/cache. A stale
-    # cache (older catalog, missing newer auto/ routes) makes the picker look
-    # empty or partial, so clear it here; Claude Code refetches on next start.
-    $ccCache = Join-Path $ccDir 'cache'
-    $ccCacheFile = Join-Path $ccCache 'gateway-models.json'
-    if (Test-Path $ccCacheFile) {
-        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-        Copy-Item $ccCacheFile "$ccCacheFile.bak-$stamp" -Force
-        Remove-Item $ccCacheFile -Force
-        Write-Ok 'stale gateway-model cache cleared (picker + extension refetch the live catalog)'
+    # Claude Code caches the gateway model catalog in ~/.claude/cache, and when
+    # it REFETCHES the catalog itself it filters it to claude-named models
+    # (322 models / 2 auto routes) - which is why the picker kept showing only
+    # auto/claude-opus + auto/claude-sonnet. Do NOT delete the cache (that
+    # forces the filtered refetch). Instead seed it with the auto/ routes and a
+    # far-future fetchedAt so the app treats it as fresh and never refetches.
+    $seedScript = Join-Path $KitRoot 'fix-model-cache.ps1'
+    if (Test-Path $seedScript) {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $seedScript -Base "http://localhost:$Port" | ForEach-Object { Write-Ok $_ }
+    } else {
+        Write-Warn 'fix-model-cache.ps1 missing - /model picker may only show claude-named auto routes'
     }
 
     $prev = Get-Content $ccFile -Raw -ErrorAction SilentlyContinue
