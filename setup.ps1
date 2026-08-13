@@ -115,8 +115,9 @@ $Base   = "http://127.0.0.1:$Port"
 # ---------- 2. node ----------
 Write-Step 'Checking Node.js'
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "Node.js is required but not on PATH. Install LTS and re-run, e.g.:" -ForegroundColor Red
-    Write-Host "    winget install OpenJS.NodeJS.LTS" -ForegroundColor Yellow
+    Write-Host "Node.js is required but not on PATH." -ForegroundColor Red
+    Write-Host "    On a fresh PC run:  powershell -ExecutionPolicy Bypass -File bootstrap.ps1" -ForegroundColor Yellow
+    Write-Host "    (or just:           winget install OpenJS.NodeJS.LTS   then re-run)" -ForegroundColor Yellow
     exit 1
 }
 Write-Ok "node $(node --version)"
@@ -392,6 +393,16 @@ $flowBridgeOk = (-not $SkipFlowBridge) -and $flowOk
 
 # ---------- 9. Claude Code ----------
 if (-not $SkipClaudeCode) {
+    # The Claude Code CLI is what the gateway is wired into (terminal, VS Code
+    # extension and Claude Desktop's Code tab all share it). Fresh PCs get it
+    # installed right here - nothing else in this script works without it.
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        Write-Step 'Installing the Claude Code CLI (npm i -g @anthropic-ai/claude-code)'
+        & npm install -g @anthropic-ai/claude-code 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Ok "claude $(claude --version)" }
+        else { Write-Warn 'claude CLI install failed - re-run setup.ps1 after fixing npm' }
+    }
+
     Write-Step 'Wiring Claude Code to the gateway'
     # Claude Code appends /v1/messages itself; the token 'omniroute' is the
     # gateway's localhost magic token (no secret stored in settings.json).
@@ -413,10 +424,29 @@ if (-not $SkipClaudeCode) {
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT' -NotePropertyValue '1' -Force
 
     # The /model picker shows only gateway-discovered models on this allowlist.
-    # reliable = default coding combo (auto-falls-back to healthy providers, so
-    # dead NIM models never interrupt); the other three give one-click access to
-    # vision, best-coding and fastest routing. Add more ids here to expose them.
-    $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue @('auto/coding:reliable', 'auto/best-vision', 'auto/best-coding', 'auto/best-fast') -Force
+    # Discover ALL auto/ routes from the live gateway so every combo (reliable
+    # default, best-vision, best-coding, best-fast, per-family routes, ...) is
+    # one keystroke away. Fall back to the core four if discovery fails.
+    $autoRoutes = @()
+    try {
+        $catalog = Invoke-RestMethod -Uri "$Base/v1/models" -Headers @{ Authorization = 'Bearer omniroute' } -TimeoutSec 30
+        $autoRoutes = @($catalog.data | ForEach-Object { $_.id } | Where-Object { $_ -like 'auto/*' } | Sort-Object)
+    } catch { Write-Warn "could not discover auto/ routes from gateway ($_) - using the core four" }
+    if ($autoRoutes.Count -eq 0) { $autoRoutes = @('auto/coding:reliable', 'auto/best-vision', 'auto/best-coding', 'auto/best-fast') }
+    $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue $autoRoutes -Force
+    Write-Ok "availableModels -> $($autoRoutes.Count) auto routes in the /model picker"
+
+    # Claude Code caches the gateway model catalog in ~/.claude/cache. A stale
+    # cache (older catalog, missing newer auto/ routes) makes the picker look
+    # empty or partial, so clear it here; Claude Code refetches on next start.
+    $ccCache = Join-Path $ccDir 'cache'
+    $ccCacheFile = Join-Path $ccCache 'gateway-models.json'
+    if (Test-Path $ccCacheFile) {
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        Copy-Item $ccCacheFile "$ccCacheFile.bak-$stamp" -Force
+        Remove-Item $ccCacheFile -Force
+        Write-Ok 'stale gateway-model cache cleared (picker + extension refetch the live catalog)'
+    }
 
     $prev = Get-Content $ccFile -Raw -ErrorAction SilentlyContinue
     $json = $cc | ConvertTo-Json -Depth 12
@@ -551,6 +581,39 @@ if (-not $SkipClaudeCode) {
     Write-Host '    add more with:       skills add <owner>/<repo> --skill <name> -g -a claude-code' -ForegroundColor DarkGray
 }
 
+# ---------- 9c. Claude Desktop (official app - Code tab uses the gateway) ----------
+if (-not $SkipClaudeCode) {
+    Write-Step 'Claude Desktop (official app - no extension needed)'
+    $desktopExe = @(
+        (Join-Path $env:LOCALAPPDATA 'AnthropicClaude\claude.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\claude\claude.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Claude\claude.exe')
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($desktopExe) {
+        Write-Ok "Claude Desktop already installed: $desktopExe"
+        Write-Ok '   the Code tab reads ~/.claude/settings.json, so it already routes through this gateway.'
+    } else {
+        Write-Host '    downloading the official Claude Desktop installer (claude.ai)...'
+        $dl = Join-Path $env:TEMP 'claude-desktop-setup.exe'
+        try {
+            Invoke-WebRequest -Uri 'https://claude.ai/api/desktop/win32/x64/exe/latest/redirect' -OutFile $dl -UseBasicParsing -TimeoutSec 180
+            Write-Ok "downloaded to $dl - launching the installer now"
+            Start-Process -FilePath $dl
+            Write-Host ''
+            Write-Host '    After installing: sign in with any Claude account, open the CODE tab,' -ForegroundColor Yellow
+            Write-Host '    pick Local + a project folder, and start a session - it routes through' -ForegroundColor Yellow
+            Write-Host '    http://localhost:20128 (your free gateway) automatically - no extension.' -ForegroundColor Yellow
+            Write-Host '    (The app hides non-Claude model names in its picker, but ANTHROPIC_MODEL' -ForegroundColor DarkGray
+            Write-Host '     pins auto/coding:reliable regardless - that is expected.)' -ForegroundColor DarkGray
+            Write-Host '    Deep option - route the app itself (Chat tab included):' -ForegroundColor DarkGray
+            Write-Host '      Settings -> Developer -> Inference provider = Gateway' -ForegroundColor DarkGray
+            Write-Host "      Gateway base URL: $Base    Auth scheme: bearer    API key: omniroute" -ForegroundColor DarkGray
+        } catch {
+            Write-Warn "Claude Desktop download failed: $_ (grab it manually at claude.com/download)"
+        }
+    }
+}
+
 # ---------- 10. auto-start ----------
 if (-not $SkipAutoStart) {
     Write-Step 'Registering auto-start at login'
@@ -575,7 +638,7 @@ Write-Host '=================================================' -ForegroundColor 
 Write-Host "  Gateway   : $Base          (auto-starts at login)"
 Write-Host "  Dashboard : $Base/admin    (password from config/local.env - change it!)"
 Write-Host "  Extension : $HOME\omniroute-cookie-pusher"
-if (-not $SkipClaudeCode) { Write-Host "  Claude Code: wired (run 'claude' - model 'auto', list all with /model)" }
+if (-not $SkipClaudeCode) { Write-Host "  Claude Code: wired (run 'claude' or the Claude Desktop Code tab - $($autoRoutes.Count) auto/ routes in /model)" }
 if ($flowBridgeOk) {
     Write-Host '  Flow images : flowui/nano-banana-2 via bridge\flow-browser\start-flow-browser.cmd (headless, auto-starts)'
     Write-Host '                image requests route through the generate_image MCP tool -> same engine, same quality'

@@ -32,17 +32,31 @@ machine: `git clone <url>` → run `setup.ps1`. (If you'd rather host it
 somewhere else — GitLab, Gitea, a USB stick — the kit is just a folder; copy
 it and run `setup.ps1` from there.)
 
-## One command — any new Windows device
+## One command — any new Windows device (even a BRAND-NEW, empty PC)
+
+The kit ships `bootstrap.ps1`, which assumes **nothing but PowerShell and
+internet** (PowerShell is built into Windows). It installs the prerequisites
+(Git, Node.js LTS, Python, Google Chrome, GitHub CLI — via winget, installing
+winget itself first if needed), then runs the full setup.
+
+**This repo is private**, so on a fresh machine the zero-typing path is:
+
+1. On the new PC, log into GitHub → open the repo page → **Code → Download
+   ZIP** → extract anywhere
+2. Double-click **`install.cmd`** — it installs any missing prerequisites
+   automatically, then runs the full setup. That's it.
+
+Already have a machine with Git/Node, or a **public** fork? One line end to
+end (or use `irm … | iex` on a truly bare PC for a public repo):
 
 ```bash
 git clone https://github.com/amanmbg-dom/omniroute-setup-kit.git omniroute-kit && cd omniroute-kit && powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-That's it — one line, end to end. Or copy the folder onto the machine (USB,
-zip, whatever) and double-click **`install.cmd`**. The script is **idempotent**
-— safe to re-run any time; it skips what's already configured. The only
-downloads are OmniRoute itself (npm) and the flowui bridge's Playwright;
-everything else ships in the repo.
+The setup is **idempotent** — safe to re-run any time; it skips what's
+already configured. Downloads on a fresh PC: the prerequisite installers
+(via winget) + OmniRoute (npm) + the flowui bridge's Playwright. Everything
+else ships in the repo.
 
 After setup, two one-time manual steps (about 1 minute):
 
@@ -66,7 +80,7 @@ one manual step:
 
 ## What setup.ps1 does
 
-1. Checks Node.js (install with `winget install OpenJS.NodeJS.LTS` if missing)
+1. Checks Node.js (on a fresh PC `bootstrap.ps1` installs it first)
 2. Installs OmniRoute (`npm i -g omniroute@3.8.49`) — the core download
 3. Writes the gateway launcher to `~\.omniroute\` and starts the server
 4. Logs in to the dashboard (password from `config/local.env`)
@@ -83,15 +97,23 @@ one manual step:
     session — `flowui/nano-banana-2`), **headless by default**, and registers
     the `flowui` **MCP server** in Claude Code (`generate_image` tool) so every
     image request funnels through the same engine
-9. **Wires Claude Code** to the gateway (merges the `ANTHROPIC_*` env block
+9. Installs the **Claude Code CLI** if missing (`npm i -g
+   @anthropic-ai/claude-code`), then **wires Claude Code** to the gateway
+   (merges the `ANTHROPIC_*` env block into `~/.claude/settings.json`,
+   preserving existing settings), discovers **all `auto/` routes** from the
+   gateway into the `/model` picker allowlist, and clears the stale
+   gateway-model cache so the picker shows the live catalog
 9b. **Extra MCPs + skills.sh**: registers Playwright, Context7, Chrome DevTools,
     Memory, Filesystem, Sequential Thinking, Everything, Fetch and GitHub MCP
     servers (idempotent, GitHub only when `gh` is logged in), installs the
     `skills` CLI and a curated set of high-value skills (tdd, diagnosing-bugs,
     improve-codebase-architecture, grill-me, vercel-react-best-practices,
     deploy-to-vercel)
-
-   into `~/.claude/settings.json`, preserving existing settings)
+9c. **Claude Desktop** (official app — the Code tab is Claude Code in a GUI
+    and reads the same settings, so it routes through this gateway with **no
+    extension**). Downloads the installer from claude.ai if the app isn't
+    installed, launches it, and prints the sign-in guide. Standalone helper:
+    `setup-desktop.cmd`
 10. Registers the gateway **and the flowui bridge** to **auto-start at login**
     (Startup folder)
 
@@ -161,7 +183,7 @@ the original is backed up to `settings.json.bak-kit`):
 | `ANTHROPIC_AUTH_TOKEN` | `omniroute` | the gateway's localhost magic token — no secret stored in settings.json |
 | `ANTHROPIC_MODEL` | `auto/coding:reliable` | default model — the reliability-first auto combo: it scores providers by health and auto-falls-back when a model is dead, so NIM outages never interrupt a session (any `nvidia/…`, `opencode-zen/…`, `auto/best-*` also works) |
 | `ANTHROPIC_SMALL_FAST_MODEL` | `auto/best-fast` | background/summarization tasks |
-| `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `1` | lets `/model` list all 355 models from the gateway |
+| `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `1` | lets `/model` list the gateway's live catalog (all **38 `auto/` routes** are exposed in the picker) |
 | `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT` | `1` | stops window enforcement errors on non-Claude models |
 
 Then just run `claude` in any folder — traffic goes to the free pool. Switch
@@ -174,7 +196,42 @@ unnecessary verification and answer directly.
 ANTHROPIC_MODEL=nvidia/nvidia/nemotron-ultra-550b claude
 ```
 
+The `/model` picker shows **every `auto/` route** (reliable, best-coding,
+best-vision, best-fast, best-chat, per-family routes like `auto/glm` /
+`auto/minimax` / `auto/zai`, chaos, offline… — 38 in total) via
+`availableModels`. If a picker ever looks empty or partial, the model cache is
+stale — clear `~/.claude/cache/gateway-models.json` (setup.ps1 does this
+automatically) and restart Claude Code.
+
 Skip with `-SkipClaudeCode` if you want to leave Claude Code alone.
+
+## Claude Desktop (official app — no extension)
+
+Anthropic's official desktop app (`claude.com/download`) has a **Code tab**
+that *is* Claude Code in a GUI (chat + diff review + integrated terminal +
+browser preview), and it reads the **same `~/.claude/settings.json`** as the
+CLI. That means it inherits the gateway wiring above automatically — run
+`setup-desktop.cmd` (or setup step 9c) to install it, then:
+
+1. Open the app → sign in with any Claude account
+2. Click the **Code** tab → Environment: **Local** → pick a project folder
+3. Type a message — it routes through `http://localhost:20128` (your free
+   pool), model `auto/coding:reliable`, all 38 `auto/` routes in the model
+   menu (Ctrl+Shift+I). **No VS Code extension needed** — you can uninstall it.
+
+Two honest notes:
+
+- The app's model *dropdown* deliberately only displays Claude-family names;
+  `ANTHROPIC_MODEL` still pins your combo, so this is cosmetic. (Same behavior
+  as other gateways — documented in the Claude Desktop routing guides.)
+- **Deep option**: Claude Desktop has a native **Gateway** inference provider
+  (Settings → Developer → Inference provider = Gateway → base
+  `http://localhost:20128`, auth `bearer` / `omniroute`) that routes the app's
+  own inference — Chat tab included. It only appears in some builds/plans; if
+  you don't see it, the Code-tab route above is the one to use.
+
+The desktop app needs **Git for Windows** on first launch — the kit's
+`bootstrap.ps1` installs it.
 
 ## Free AI images (Google Flow — `flowui`)
 
