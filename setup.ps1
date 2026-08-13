@@ -154,6 +154,13 @@ $launcherDst = Join-Path $omHome 'start-omniroute.cmd'
 Copy-Item $launcherSrc $launcherDst -Force
 Write-Ok "launcher -> $launcherDst"
 
+# Ship the model-cycle helper next to the launcher (stable location the /cycle-model command uses).
+$cycleSrc = Join-Path $KitRoot 'cycle-model.ps1'
+if (Test-Path $cycleSrc) {
+    Copy-Item $cycleSrc (Join-Path $omHome 'cycle-model.ps1') -Force
+    Write-Ok "cycle-model.ps1 -> ~\.omniroute\cycle-model.ps1 (used by /cycle-model)"
+}
+
 # ---------- 5. server up ----------
 function Test-Up([int]$tries = 30) {
     for ($i = 0; $i -lt $tries; $i++) {
@@ -499,6 +506,31 @@ if (-not $SkipClaudeCode) {
         }
         Write-Ok "$cmdCount Claude Code command(s) installed to ~/.claude/commands (e.g. /images)"
     }
+}
+
+# ---------- 9a2. VS Code keybinding for quick model switching ----------
+Write-Step 'Adding VS Code keybinding: Ctrl+Alt+M -> focus Claude Code input (then /cycle-model)'
+$vscodeUser = Join-Path $env:APPDATA 'Code\User'
+$kbFile = Join-Path $vscodeUser 'keybindings.json'
+New-Item -ItemType Directory -Force -Path $vscodeUser | Out-Null
+$bindings = @()
+if (Test-Path $kbFile) {
+    try {
+        $existing = Get-Content $kbFile -Raw | ConvertFrom-Json
+        if ($existing) { $bindings = @($existing) }
+    } catch { Write-Warn "keybindings.json unreadable - rewriting from scratch" }
+}
+$found = $false
+foreach ($b in $bindings) {
+    if ($b.command -eq 'claude-vscode.focus') { $found = $true }
+}
+if (-not $found) {
+    $bindings += [pscustomobject]@{ key = 'ctrl+alt+m'; command = 'claude-vscode.focus'; when = 'editorTextFocus || terminalFocus' }
+    $json = $bindings | ConvertTo-Json -Depth 6
+    [System.IO.File]::WriteAllText($kbFile, $json, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Ok 'Ctrl+Alt+M -> Claude Code: Focus input (then type /cycle-model)'
+} else {
+    Write-Ok 'keybinding already present - skipped'
 }
 
 # ---------- 9b. extra MCPs + skills.sh ----------

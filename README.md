@@ -192,6 +192,14 @@ tasks, use the `/fast` command (ships with the kit) to switch to
 `auto/best-fast` latency-first routing; it also tells the agent to skip
 unnecessary verification and answer directly.
 
+**Cycle the model in one keystroke:** the `/cycle-model` command (ships with
+the kit) rotates the default through `auto/coding:reliable` → `auto/best-coding`
+→ `auto/best-fast` (pass a slot to jump straight there: `/cycle-model fast`).
+It updates `~/.claude/settings.json` for new sessions and prints the exact
+`/model` value to apply to the current one. In VS Code, `Ctrl+Alt+M` focuses
+the Claude Code input so `/cycle-model` is one keystroke + Enter away
+(keybinding written by `setup.ps1` to `%APPDATA%\Code\User\keybindings.json`).
+
 ```
 ANTHROPIC_MODEL=nvidia/nvidia/nemotron-ultra-550b claude
 ```
