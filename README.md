@@ -265,6 +265,36 @@ Sizes: `1792x1024` (16:9 hero) · `1536x1024` (4:3) · `1024x1024` (square) ·
 per Google account — on exhaustion, switch account or wait for the reset.
 Details: `bridge\flow-browser\README-flowui.md`.
 
+## Remote VPS — run the provider farm in the cloud
+
+Want the AI tabs off your machine entirely? The kit ships a complete VPS
+deploy package (`vps/`): **setup-vps.sh** installs OmniRoute + a headless
+Chromium provider profile + a systemd service + a reclamation-proof keep-alive
+cron + a Cloudflare/Tailscale tunnel on any fresh Ubuntu box, then mints an
+admin API key. Your laptop becomes a thin client pointing at the VPS.
+
+```bash
+# on the VPS (one shot; cloudflare tunnel + random password by default)
+bash setup-vps.sh
+
+# on your laptop afterwards (ships with the kit, also at ~/.omniroute)
+powershell -ExecutionPolicy Bypass -File ~\.omniroute\omni-remote.ps1
+powershell -ExecutionPolicy Bypass -File ~\.omniroute\omni-local.ps1   # switch back
+```
+
+`omni-remote.ps1` health-checks the tunnel, SSH-starts the service if it's
+down (needs `SSH_HOST` in `~/.omniroute/remote.env`), rewrites
+`~/.claude/settings.json` to the VPS, and prints the key. Session helpers in
+`~/.omniroute/vps/`: `import-cookies.sh` (import Cookie Pusher cookie JSONs
+into the headless profile), `refresh-sessions.sh` (headless session refresh),
+`signin.sh` (one-time interactive sign-in, needs install with `--with-gui`).
+
+Honest notes: free tiers (Oracle Always Free, Google, AWS) all require a credit
+card for signup, and Oracle reclaims idle instances — the included keep-alive
+cron (10-min cadence) burns a little CPU to prevent that, so prefer 24/7
+running over stop/start. trycloudflare.com quick-tunnel URLs are ephemeral; add
+a DNS route with your own domain for a permanent URL.
+
 ## What's NOT included (by design)
 
 - **Node.js** — a prerequisite; the script checks for it

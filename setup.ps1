@@ -159,6 +159,20 @@ $cycleSrc = Join-Path $KitRoot 'cycle-model.ps1'
 if (Test-Path $cycleSrc) {
     Copy-Item $cycleSrc (Join-Path $omHome 'cycle-model.ps1') -Force
     Write-Ok "cycle-model.ps1 -> ~\.omniroute\cycle-model.ps1 (used by /cycle-model)"
+
+    # Ship the VPS deploy package + remote client launchers.
+    $vpsSrc = Join-Path $KitRoot 'vps'
+    if (Test-Path $vpsSrc) {
+        Copy-Item -Recurse -Force $vpsSrc (Join-Path $omHome 'vps')
+        Write-Ok 'vps/ -> ~\.omniroute\vps\ (setup-vps.sh + session helpers)'
+    }
+    foreach ($c in @('omni-remote.ps1', 'omni-local.ps1')) {
+        $s = Join-Path $KitRoot $c
+        if (Test-Path $s) {
+            Copy-Item $s (Join-Path $omHome $c) -Force
+            Write-Ok "$c -> ~\.omniroute\$c (remote client launcher)"
+        }
+    }
 }
 
 # ---------- 5. server up ----------
