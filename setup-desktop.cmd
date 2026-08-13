@@ -37,11 +37,13 @@ if defined DESKTOP_EXE (
 echo.
 echo [3/4] Downloading the official Claude Desktop installer...
 set "DL=%TEMP%\claude-desktop-setup.exe"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://claude.ai/api/desktop/win32/x64/exe/latest/redirect' -OutFile '%DL%' -UseBasicParsing -TimeoutSec 180"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { Invoke-WebRequest -Uri 'https://claude.ai/api/desktop/win32/x64/exe/latest/redirect' -OutFile '%DL%' -UseBasicParsing -TimeoutSec 180; $h=Get-Content -Path '%DL%' -Encoding Byte -TotalCount 2; if (-not ($h[0] -eq 0x4D -and $h[1] -eq 0x5A)) { throw 'Cloudflare challenge page instead of installer' }; exit 0 } catch { Write-Host ('CLAUDE_DL_BLOCKED: ' + $_.Exception.Message); exit 1 }"
 if errorlevel 1 (
-  echo   Download failed. Grab the installer manually at:  https://claude.com/download
-  pause
-  exit /b 1
+  echo   Automatic download is blocked by a Cloudflare check (claude.ai)
+  echo   Opening the official download page in your browser instead - click
+  echo   "Download for Windows" there, then run the downloaded installer.
+  start "" "https://claude.com/download"
+  goto :guide
 )
 echo   Downloaded to %DL%
 echo   Launching the installer - click through it (defaults are fine).

@@ -595,22 +595,37 @@ if (-not $SkipClaudeCode) {
     } else {
         Write-Host '    downloading the official Claude Desktop installer (claude.ai)...'
         $dl = Join-Path $env:TEMP 'claude-desktop-setup.exe'
+        $launched = $false
         try {
             Invoke-WebRequest -Uri 'https://claude.ai/api/desktop/win32/x64/exe/latest/redirect' -OutFile $dl -UseBasicParsing -TimeoutSec 180
+            # claude.ai sits behind a Cloudflare challenge - verify we actually got
+            # an EXE (starts with 'MZ'), not a 'Just a moment...' HTML challenge page.
+            $head = Get-Content -Path $dl -Encoding Byte -TotalCount 2
+            $isExe = ($head[0] -eq 0x4D) -and ($head[1] -eq 0x5A)
+            if (-not $isExe) { throw 'got a Cloudflare challenge page instead of the installer' }
             Write-Ok "downloaded to $dl - launching the installer now"
             Start-Process -FilePath $dl
-            Write-Host ''
-            Write-Host '    After installing: sign in with any Claude account, open the CODE tab,' -ForegroundColor Yellow
-            Write-Host '    pick Local + a project folder, and start a session - it routes through' -ForegroundColor Yellow
-            Write-Host '    http://localhost:20128 (your free gateway) automatically - no extension.' -ForegroundColor Yellow
-            Write-Host '    (The app hides non-Claude model names in its picker, but ANTHROPIC_MODEL' -ForegroundColor DarkGray
-            Write-Host '     pins auto/coding:reliable regardless - that is expected.)' -ForegroundColor DarkGray
-            Write-Host '    Deep option - route the app itself (Chat tab included):' -ForegroundColor DarkGray
-            Write-Host '      Settings -> Developer -> Inference provider = Gateway' -ForegroundColor DarkGray
-            Write-Host "      Gateway base URL: $Base    Auth scheme: bearer    API key: omniroute" -ForegroundColor DarkGray
+            $launched = $true
         } catch {
-            Write-Warn "Claude Desktop download failed: $_ (grab it manually at claude.com/download)"
+            Write-Warn "Automatic download blocked: $_"
+            Write-Warn '    Opening the official download page in your browser instead - click "Download for Windows"'
+            Write-Warn '    there (a real browser passes the Cloudflare check that scripts cannot).'
+            Start-Process 'https://claude.com/download'
         }
+        Write-Host ''
+        if ($launched) {
+            Write-Host '    After installing: sign in with any Claude account, open the CODE tab,' -ForegroundColor Yellow
+        } else {
+            Write-Host '    After the browser download finishes, run the installer, sign in with any' -ForegroundColor Yellow
+            Write-Host '    Claude account, open the CODE tab,' -ForegroundColor Yellow
+        }
+        Write-Host '    pick Local + a project folder, and start a session - it routes through' -ForegroundColor Yellow
+        Write-Host '    http://localhost:20128 (your free gateway) automatically - no extension.' -ForegroundColor Yellow
+        Write-Host '    (The app hides non-Claude model names in its picker, but ANTHROPIC_MODEL' -ForegroundColor DarkGray
+        Write-Host '     pins auto/coding:reliable regardless - that is expected.)' -ForegroundColor DarkGray
+        Write-Host '    Deep option - route the app itself (Chat tab included):' -ForegroundColor DarkGray
+        Write-Host '      Settings -> Developer -> Inference provider = Gateway' -ForegroundColor DarkGray
+        Write-Host "      Gateway base URL: $Base    Auth scheme: bearer    API key: omniroute" -ForegroundColor DarkGray
     }
 }
 
