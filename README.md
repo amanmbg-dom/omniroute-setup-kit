@@ -96,7 +96,35 @@ one manual step:
     (Startup folder)
 
 Flags: `-SkipInstall`, `-SkipProviders`, `-SkipExtension`, `-SkipClaudeCode`,
-`-SkipAutoStart`, `-SkipBridge` (gemini-bridge), `-SkipFlowBridge` (flowui).
+`-SkipAutoStart`, `-SkipBridge` (gemini-bridge), `-SkipFlowBridge` (flowui),
+`-Pull` (git pull the kit first), `-UpdateSkills` (overwrite existing skills,
+backing up to `<name>.bak-kit`).
+
+## Update everything on an existing machine — one command
+
+Re-runs are safe and idempotent. To pull the latest kit **and** refresh
+skills, extension, commands, MCPs and bridges in one action:
+
+```powershell
+# double-click update.cmd inside the kit folder, or from any folder:
+powershell -ExecutionPolicy Bypass -File "$HOME\omniroute-kit\setup.ps1" -Pull -UpdateSkills
+```
+
+That one command is the whole update:
+
+- `-Pull` runs `git pull --ff-only` first, so the kit, extension, commands
+  and skill files are the latest from GitHub (commit or stash local edits
+  in the kit first if a pull refuses).
+- `-UpdateSkills` re-copies the kit's skills to `~/.claude/skills`, backing
+  up any existing copy to `~/.claude/skills/<name>.bak-kit` first. Without
+  the flag, already-installed skills are left untouched to protect local
+  customizations.
+- Everything else re-runs idempotently: extension + fresh per-machine
+  token, slash commands, MCP servers, skills.sh, bridges, gateway wiring,
+  auto-start.
+
+After updating, reload the Cookie Pusher extension in `edge://extensions`
+(Developer mode → reload) so the browser picks up the new files.
 
 ## Configuration — `config/local.env`
 

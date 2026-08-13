@@ -35,8 +35,20 @@
 .PARAMETER SkipAutoStart
   Skip registering the login auto-start launcher.
 
+.PARAMETER Pull
+  Run `git pull --ff-only` inside the kit folder before configuring, so the
+  kit (skills, extension, commands, launchers) is refreshed from GitHub first.
+
+.PARAMETER UpdateSkills
+  Re-copy the kit's skills to ~/.claude/skills even if already installed,
+  backing up any existing copy to <name>.bak-kit first. Without this flag,
+  existing skills are left untouched to protect local customizations.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File setup.ps1
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File setup.ps1 -Pull -UpdateSkills
 #>
 [CmdletBinding()]
 param(
@@ -46,7 +58,9 @@ param(
     [switch]$SkipClaudeCode,
     [switch]$SkipBridge,
     [switch]$SkipFlowBridge,
-    [switch]$SkipAutoStart
+    [switch]$SkipAutoStart,
+    [switch]$Pull,
+    [switch]$UpdateSkills
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,6 +83,19 @@ function Read-EnvFile($path) {
         }
     }
     return $h
+}
+
+# -Pull: refresh the kit itself from its git remote before configuring.
+if ($Pull) {
+    Write-Step 'Pulling latest kit from git remote'
+    if (Test-Path (Join-Path $KitRoot '.git')) {
+        git -C $KitRoot pull --ff-only 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn 'git pull reported an error - continuing with the local copy (commit or stash local changes first if needed)'
+        }
+    } else {
+        Write-Warn "No .git folder in $KitRoot - skipping pull (clone fresh or copy the folder again)"
+    }
 }
 
 # ---------- 1. config ----------
@@ -401,21 +428,33 @@ if (-not $SkipClaudeCode) {
     Write-Ok '   (existing permissions/hooks preserved; original backed up to settings.json.bak-kit)'
 
     # Ship the kit's skills (single-page-site, ...) to ~/.claude/skills.
-    # Only copies folders that are not already installed, so local
-    # customizations are never clobbered by re-runs.
+    # By default only copies folders that are not already installed, so local
+    # customizations are never clobbered by re-runs. With -UpdateSkills,
+    # existing copies are backed up to <name>.bak-kit and overwritten.
     $skillsSrc = Join-Path $PSScriptRoot 'skills'
     $skillsDst = Join-Path $ccDir 'skills'
     if (Test-Path $skillsSrc) {
         New-Item -ItemType Directory -Force -Path $skillsDst | Out-Null
         $installed = 0
+        $backedUp = 0
         foreach ($skillDir in Get-ChildItem $skillsSrc -Directory) {
             $dstSkill = Join-Path $skillsDst $skillDir.Name
-            if (-not (Test-Path (Join-Path $dstSkill 'SKILL.md'))) {
+            if (-not (Test-Path (Join-Path $dstSkill 'SKILL.md')) -or $UpdateSkills) {
+                if ($UpdateSkills -and (Test-Path $dstSkill)) {
+                    $bakSkill = "$dstSkill.bak-kit"
+                    if (Test-Path $bakSkill) { Remove-Item $bakSkill -Recurse -Force }
+                    Rename-Item $dstSkill $bakSkill
+                    $backedUp++
+                }
                 Copy-Item $skillDir.FullName $dstSkill -Recurse -Force
                 $installed++
             }
         }
-        Write-Ok "$installed kit skill(s) installed to ~/.claude/skills (skipped existing)"
+        if ($UpdateSkills) {
+            Write-Ok "$installed kit skill(s) re-installed to ~/.claude/skills ($backedUp previous copy/ies backed up to .bak-kit)"
+        } else {
+            Write-Ok "$installed kit skill(s) installed to ~/.claude/skills (skipped existing; use -UpdateSkills to refresh)"
+        }
     }
 
     # Ship the kit's Claude Code slash commands (~/.claude/commands), e.g. /images.
@@ -459,12 +498,27 @@ if (-not $SkipClaudeCode) {
             Write-Warn "$cmd not found - skipping MCP '$name'"
             return
         }
-        & claude mcp remove $name 2>$null | Out-Null
-        $argList = @()
-        foreach ($k in $mcpEnv.Keys) { $argList += '--env'; $argList += "$k=$($mcpEnv[$k])" }
-        $argList += $cmd
-        $argList += $mcpArgs
-        & claude mcp add -s user $name @argList 2>$null
+        # claude.exe writes errors to stderr even for benign cases (e.g. "no
+        # MCP server named X" when removing an unregistered server). With
+        # $ErrorActionPreference='Stop' that would abort the script, so scope
+        # the preference down around the CLI calls and report via $LASTEXITCODE.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'SilentlyContinue'
+        try {
+            & claude mcp remove $name 2>$null | Out-Null
+            # Server flags go after `--` so the CLI passes them to the server
+            # command instead of parsing them as its own options.
+            $argList = @('-s', 'user', $name)
+            foreach ($k in $mcpEnv.Keys) { $argList += '--env'; $argList += "$k=$($mcpEnv[$k])" }
+            $argList += '--'
+            $argList += $cmd
+            foreach ($a in $mcpArgs) { $argList += $a }
+            & claude mcp add @argList 2>$null | Out-Null
+        } catch {
+            # reported via $LASTEXITCODE below
+        } finally {
+            $ErrorActionPreference = $prevEap
+        }
         if ($LASTEXITCODE -eq 0) { Write-Ok "MCP '$name' registered" }
         else { Write-Warn "claude mcp add $name failed" }
     }
