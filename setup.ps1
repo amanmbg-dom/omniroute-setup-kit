@@ -110,6 +110,31 @@ $Pass = if ($cfg.DASHBOARD_PASSWORD) { $cfg.DASHBOARD_PASSWORD } else { 'CHANGEM
 $NimKey = $cfg.NVIDIA_NIM_API_KEY
 $ZenKey = $cfg.OPENCODE_ZEN_API_KEY
 $GemKey = $cfg.GEMINI_API_KEY
+# freellm.net free-tier providers (all OpenAI-compatible; keys optional, skipped when blank)
+$GroqKey      = $cfg.GROQ_API_KEY
+$OrKey        = $cfg.OPENROUTER_API_KEY
+$GhModelsKey  = $cfg.GITHUB_MODELS_API_KEY
+$CfKey        = $cfg.CLOUDFLARE_API_KEY
+$MsKey        = $cfg.MODELSCOPE_API_KEY
+$Llm7Key      = $cfg.LLM7_API_KEY
+$OvhKey       = $cfg.OVHCLOUD_API_KEY
+$OllamaKey    = $cfg.OLLAMA_API_KEY
+$SambaKey     = $cfg.SAMBANOVA_API_KEY
+$AionKey      = $cfg.AION_API_KEY
+$AgnesKey     = $cfg.AGNES_API_KEY
+$ChutesKey    = $cfg.CHUTES_API_KEY
+$Ai21Key      = $cfg.AI21_API_KEY
+$NscaleKey    = $cfg.NSCALE_API_KEY
+$AliKey       = $cfg.ALIBABA_API_KEY
+$ZaiKey       = $cfg.ZAI_API_KEY
+$MistralKey   = $cfg.MISTRAL_API_KEY
+$CohereKey    = $cfg.COHERE_API_KEY
+$CerebrasKey  = $cfg.CEREBRAS_API_KEY
+$HfKey        = $cfg.HUGGINGFACE_API_KEY
+$DeepseekKey  = $cfg.DEEPSEEK_API_KEY
+$XaiKey       = $cfg.XAI_API_KEY
+$NebiusKey    = $cfg.NEBIUS_API_KEY
+$SiliconKey   = $cfg.SILICONFLOW_API_KEY
 $Base   = "http://127.0.0.1:$Port"
 
 # ---------- 2. node ----------
@@ -247,17 +272,44 @@ Write-Ok 'dashboard login OK'
 
 # ---------- 7. providers ----------
 if (-not $SkipProviders) {
-    Write-Step 'Adding free providers (NVIDIA NIM + OpenCode Zen + Google Gemini)'
+    Write-Step 'Adding free providers (NVIDIA NIM + OpenCode Zen + Gemini + freellm.net tier)'
     # GET /api/providers returns { connections: [...], total: N }
     $provResp = Invoke-RestMethod -WebSession $sess -Uri "$Base/api/providers" -TimeoutSec 10
     if ($provResp -is [System.Array]) { $conns = @($provResp) }
     elseif ($provResp.connections) { $conns = @($provResp.connections) }
     else { $conns = @() }
 
+    # Provider ids verified against the gateway's registry (POST /api/providers).
+    # OpenRouter free models are exposed as openrouter/<model>:free once the key
+    # is set - they show up in the picker via fix-model-cache.ps1.
     $specs = @(
-        @{ id = 'nvidia';       key = $NimKey; name = 'NVIDIA NIM' },
-        @{ id = 'opencode-zen'; key = $ZenKey; name = 'OpenCode Zen' },
-        @{ id = 'gemini';       key = $GemKey; name = 'Google Gemini' }
+        @{ id = 'nvidia';        key = $NimKey;      name = 'NVIDIA NIM' },
+        @{ id = 'opencode-zen';  key = $ZenKey;      name = 'OpenCode Zen' },
+        @{ id = 'gemini';        key = $GemKey;      name = 'Google Gemini' },
+        @{ id = 'groq';          key = $GroqKey;     name = 'Groq' },
+        @{ id = 'openrouter';    key = $OrKey;       name = 'OpenRouter' },
+        @{ id = 'github-models'; key = $GhModelsKey; name = 'GitHub Models' },
+        @{ id = 'cloudflare-ai'; key = $CfKey;       name = 'Cloudflare Workers AI' },
+        @{ id = 'modelscope';    key = $MsKey;       name = 'ModelScope' },
+        @{ id = 'llm7';          key = $Llm7Key;     name = 'LLM7.io' },
+        @{ id = 'ovhcloud';      key = $OvhKey;      name = 'OVHcloud AI Endpoints' },
+        @{ id = 'ollama-cloud';  key = $OllamaKey;   name = 'Ollama Cloud' },
+        @{ id = 'sambanova';     key = $SambaKey;    name = 'SambaNova' },
+        @{ id = 'aion';          key = $AionKey;     name = 'Aion Labs' },
+        @{ id = 'agnes';         key = $AgnesKey;    name = 'Agnes AI' },
+        @{ id = 'chutes';        key = $ChutesKey;   name = 'Chutes.ai' },
+        @{ id = 'ai21';          key = $Ai21Key;     name = 'AI21 Labs' },
+        @{ id = 'nscale';        key = $NscaleKey;   name = 'Nscale' },
+        @{ id = 'alibaba';       key = $AliKey;      name = 'Alibaba Model Studio' },
+        @{ id = 'zai';           key = $ZaiKey;      name = 'Z AI (Zhipu)' },
+        @{ id = 'mistral';       key = $MistralKey;  name = 'Mistral AI' },
+        @{ id = 'cohere';        key = $CohereKey;   name = 'Cohere' },
+        @{ id = 'cerebras';      key = $CerebrasKey; name = 'Cerebras' },
+        @{ id = 'huggingface';   key = $HfKey;       name = 'Hugging Face' },
+        @{ id = 'deepseek';      key = $DeepseekKey; name = 'DeepSeek' },
+        @{ id = 'xai';           key = $XaiKey;      name = 'xAI (Grok)' },
+        @{ id = 'nebius';        key = $NebiusKey;   name = 'Nebius' },
+        @{ id = 'siliconflow';   key = $SiliconKey;  name = 'SiliconFlow' }
     )
     foreach ($sp in $specs) {
         if (-not $sp.key) { Write-Skip "$($sp.name): no key in config/local.env - skipped"; continue }
@@ -450,17 +502,35 @@ if (-not $SkipClaudeCode) {
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT' -NotePropertyValue '1' -Force
 
     # The /model picker shows only gateway-discovered models on this allowlist.
-    # Discover ALL auto/ routes from the live gateway so every combo (reliable
-    # default, best-vision, best-coding, best-fast, per-family routes, ...) is
-    # one keystroke away. Fall back to the core four if discovery fails.
-    $autoRoutes = @()
+    # Discover the single bare "auto" route PLUS every ALIVE NVIDIA NIM
+    # (nvidia/*, dead/non-chat ones excluded via config/nvidia-dead.json) PLUS
+    # the free OpenCode (opencode-zen/*-free, oc/*-free, big-pickle) and
+    # OpenRouter (openrouter/*:free) routes from the live gateway. The
+    # fix-model-cache.ps1 step below rebuilds availableModels from the same
+    # rules, so re-runs keep the list trimmed (no auto/* aliases, no dead NIM).
+    $nvidiaDead = @()
+    $deadJson = @(
+        (Join-Path $PSScriptRoot 'config\nvidia-dead.json'),
+        (Join-Path $HOME 'omniroute-setup-kit\config\nvidia-dead.json')
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($deadJson) { $nvidiaDead = @((ConvertFrom-Json (Get-Content $deadJson -Raw))) }
+    # NOTE: 'diffusion'/'translate' intentionally omitted - diffusiongemma-26b-a4b-it
+    # and riva-translate-4b-instruct v1.1/v2 answer the chat endpoint (probed alive
+    # 2026-08-14); dead variants are enumerated explicitly in nvidia-dead.json.
+    $deadPattern = 'embed|rerank|asr|tts|whisper|fastpitch|tacotron|nvclip|flux|parse|detector|reward|neva|vila|kosmos|deplot|fuyu'
+    $autoRoutes = @('auto')
     try {
-        $catalog = Invoke-RestMethod -Uri "$Base/v1/models" -Headers @{ Authorization = 'Bearer omniroute' } -TimeoutSec 30
-        $autoRoutes = @($catalog.data | ForEach-Object { $_.id } | Where-Object { $_ -like 'auto/*' } | Sort-Object)
-    } catch { Write-Warn "could not discover auto/ routes from gateway ($_) - using the core four" }
-    if ($autoRoutes.Count -eq 0) { $autoRoutes = @('auto/coding:reliable', 'auto/best-vision', 'auto/best-coding', 'auto/best-fast') }
+        $catalog = Invoke-RestMethod -Uri "$Base/v1/models" -Headers @{ Authorization = 'Bearer omniroute' } -TimeoutSec 60
+        $autoRoutes = @($catalog.data | ForEach-Object { $_.id } | Where-Object {
+            ($_ -like 'nvidia/*' -and $_ -notin $nvidiaDead -and $_ -notmatch $deadPattern) -or
+            (($_ -like 'opencode-zen/*' -or $_ -like 'oc/*') -and ($_ -like '*-free' -or $_ -like '*/big-pickle')) -or
+            ($_ -like 'openrouter/*' -and $_ -like '*:free')
+        } | Sort-Object -Unique)
+        $autoRoutes = @('auto') + $autoRoutes
+    } catch { Write-Warn "could not discover routes from gateway ($_) - using auto only" }
+    if ($autoRoutes.Count -eq 0) { $autoRoutes = @('auto') }
     $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue $autoRoutes -Force
-    Write-Ok "availableModels -> $($autoRoutes.Count) auto routes in the /model picker"
+    Write-Ok "availableModels -> $($autoRoutes.Count) routes (auto + nvidia-alive + opencode-free + openrouter:free) in the /model picker"
 
     # Claude Code caches the gateway model catalog in ~/.claude/cache, and when
     # it REFETCHES the catalog itself it filters it to claude-named models
@@ -705,7 +775,7 @@ Write-Host '=================================================' -ForegroundColor 
 Write-Host "  Gateway   : $Base          (auto-starts at login)"
 Write-Host "  Dashboard : $Base/admin    (password from config/local.env - change it!)"
 Write-Host "  Extension : $HOME\omniroute-cookie-pusher"
-if (-not $SkipClaudeCode) { Write-Host "  Claude Code: wired (run 'claude' or the Claude Desktop Code tab - $($autoRoutes.Count) auto/ routes in /model)" }
+if (-not $SkipClaudeCode) { Write-Host "  Claude Code: wired (run 'claude' or the Claude Desktop Code tab - $($autoRoutes.Count) routes in /model)" }
 if ($flowBridgeOk) {
     Write-Host '  Flow images : flowui/nano-banana-2 via bridge\flow-browser\start-flow-browser.cmd (headless, auto-starts)'
     Write-Host '                image requests route through the generate_image MCP tool -> same engine, same quality'
@@ -718,6 +788,7 @@ Write-Host "    3. Load unpacked -> $HOME\omniroute-cookie-pusher"
 Write-Host '    4. Click the extension icon -> Grab & push sessions'
 Write-Host ''
 Write-Host '  Models:  nvidia/<model>   (Nemotron Ultra 550B, Omni vision, DeepSeek V4 Pro, GLM-5.2, ...)'
-Write-Host '           opencode-zen/<model>  (deepseek-v4-flash-free, GPT-5.x line)'
+Write-Host '           opencode-zen/*-free  (deepseek-v4-flash-free, mimo-v2.5-free, big-pickle, ...)'
+Write-Host '           openrouter/*:free    (OpenRouter free tier - needs OPENROUTER_API_KEY)'
 Write-Host '           auto            (fallback pool: felo, opencode built-in, agy, blackbox, ...)'
 Write-Host '=================================================' -ForegroundColor Cyan

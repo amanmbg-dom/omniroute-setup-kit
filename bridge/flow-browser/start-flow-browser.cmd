@@ -8,11 +8,23 @@ rem  the login persists. If a session expires, run:
 rem      re-sign-in.cmd      (opens Chrome so you can sign in again)
 rem
 rem  The bridge auto-starts at login via the Startup folder entry
-rem  created by setup.ps1 (FlowUI-Bridge.cmd).
+rem  created by setup.ps1 (FlowUI-Bridge.cmd). This launcher is
+rem  location-independent: when copied into the Startup folder,
+rem  %~dp0 is the Startup folder itself, so we fall back to the
+rem  real bridge directory under the kit.
 rem ============================================================
 setlocal
-set "ROOT=%~dp0"
 set "PATH=%APPDATA%\npm;%PATH%"
+
+rem --- 0. locate the real bridge dir (works from the Startup copy too) ---
+set "ROOT=%~dp0"
+if exist "%ROOT%flow-bridge.mjs" goto root_ok
+set "ROOT=%USERPROFILE%\omniroute-setup-kit\bridge\flow-browser\"
+if not exist "%ROOT%flow-bridge.mjs" (
+  echo FlowUI bridge not found - re-run setup.ps1 first.
+  exit /b 1
+)
+:root_ok
 cd /d "%ROOT%"
 
 rem --- 1. headless by default (FLOW_HEADLESS=0 brings the window back) ---

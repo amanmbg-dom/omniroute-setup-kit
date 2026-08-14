@@ -156,8 +156,36 @@ After updating, reload the Cookie Pusher extension in `edge://extensions`
 | `DASHBOARD_PASSWORD` | Dashboard password (default `CHANGEME` — change it after first login at `http://localhost:20128/admin`) |
 | `NVIDIA_NIM_API_KEY` | `nvapi-…` from https://build.nvidia.com (free tier) |
 | `OPENCODE_ZEN_API_KEY` | `sk-…` from https://opencode.ai/zen (free tier) |
+| `GEMINI_API_KEY` | Google Gemini free tier (AI Studio) |
+| `GROQ_API_KEY` | Groq — no card, 30 RPM (https://console.groq.com/keys) |
+| `OPENROUTER_API_KEY` | OpenRouter — free `:free` models after a one-time $10 topup (https://openrouter.ai/keys) |
+| `GITHUB_MODELS_API_KEY` | GitHub Models — no card (GitHub → Settings → Tokens) |
+| `CLOUDFLARE_API_KEY` | Cloudflare Workers AI — no card, 10K neurons/day |
+| `MODELSCOPE_API_KEY` | ModelScope — registration, 2K RPD |
+| `LLM7_API_KEY` | LLM7.io — no card |
+| `OVHCLOUD_API_KEY` | OVHcloud AI Endpoints — registration |
+| `OLLAMA_API_KEY` | Ollama Cloud — registration |
+| `SAMBANOVA_API_KEY` | SambaNova — registration |
+| `AION_API_KEY` | Aion Labs — registration |
+| `AGNES_API_KEY` | Agnes AI — registration |
+| `CHUTES_API_KEY` | Chutes.ai — registration |
+| `AI21_API_KEY` | AI21 Labs — registration |
+| `NSCALE_API_KEY` | Nscale — registration |
+| `ALIBABA_API_KEY` | Alibaba Model Studio — registration |
+| `ZAI_API_KEY` | Z AI (Zhipu) — no card |
+| `MISTRAL_API_KEY` | Mistral AI — no card |
+| `COHERE_API_KEY` | Cohere — no card |
+| `CEREBRAS_API_KEY` | Cerebras — no card |
+| `HUGGINGFACE_API_KEY` | Hugging Face — no card |
+| `DEEPSEEK_API_KEY` | DeepSeek — registration |
+| `XAI_API_KEY` | xAI (Grok) — registration, credit-based |
+| `NEBIUS_API_KEY` | Nebius — registration |
+| `SILICONFLOW_API_KEY` | SiliconFlow — registration |
 
-Any key left empty simply skips that provider.
+Any key left empty simply skips that provider. All of the above come from the
+freellm.net free-tier directory (https://freellm.net/free-llm-api-keys/).
+Once a key is added, run `setup.ps1` again to wire the provider into the
+`/model` picker (OpenRouter free models appear as `openrouter/<model>:free`).
 
 ## Using the models
 
