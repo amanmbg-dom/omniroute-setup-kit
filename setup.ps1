@@ -529,12 +529,15 @@ if (-not $SkipClaudeCode) {
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT' -NotePropertyValue '1' -Force
 
     # The /model picker shows only gateway-discovered models on this allowlist.
-    # Discover the single bare "auto" route PLUS every ALIVE NVIDIA NIM
-    # (nvidia/*, dead/non-chat ones excluded via config/nvidia-dead.json) PLUS
-    # the free OpenCode (opencode-zen/*-free, oc/*-free, big-pickle) and
-    # OpenRouter (openrouter/*:free) routes from the live gateway. The
-    # fix-model-cache.ps1 step below rebuilds availableModels from the same
-    # rules, so re-runs keep the list trimmed (no auto/* aliases, no dead NIM).
+    # Mirror the picker's "majors" - the gateway's flagship auto/* routing routes
+    # (auto/coding:reliable, auto/best-coding, auto/best-fast, auto/best-vision,
+    # auto/best-reasoning, per-family auto/glm / auto/minimax / auto/zai, chaos,
+    # offline, ...) - PLUS every ALIVE NVIDIA NIM (nvidia/*, dead/non-chat ones
+    # excluded via config/nvidia-dead.json) PLUS the free OpenCode
+    # (opencode-zen/*-free, oc/*-free, big-pickle) and OpenRouter
+    # (openrouter/*:free) routes from the live gateway. The fix-model-cache.ps1
+    # step below rebuilds availableModels from the same rules, so re-runs keep
+    # the list trimmed (auto/* majors kept, dead NIM dropped).
     $nvidiaDead = @()
     $deadJson = @(
         (Join-Path $PSScriptRoot 'config\nvidia-dead.json'),
@@ -549,15 +552,20 @@ if (-not $SkipClaudeCode) {
     try {
         $catalog = Invoke-RestMethod -Uri "$Base/v1/models" -Headers @{ Authorization = 'Bearer omniroute' } -TimeoutSec 60
         $autoRoutes = @($catalog.data | ForEach-Object { $_.id } | Where-Object {
+            $_ -like 'auto/*' -or
             ($_ -like 'nvidia/*' -and $_ -notin $nvidiaDead -and $_ -notmatch $deadPattern) -or
             (($_ -like 'opencode-zen/*' -or $_ -like 'oc/*') -and ($_ -like '*-free' -or $_ -like '*/big-pickle')) -or
             ($_ -like 'openrouter/*' -and $_ -like '*:free')
         } | Sort-Object -Unique)
-        $autoRoutes = @('auto') + $autoRoutes
+        # combo/* family routes (combo/qwen, combo/glm, combo/deepseek, combo/lmarena)
+        # are created by fix-model-cache.ps1 below and are NOT in the /v1/models
+        # catalog, so mirror them explicitly into the picker allowlist.
+        $autoRoutes = @('auto') + $autoRoutes + @('combo/qwen','combo/glm','combo/deepseek','combo/lmarena')
+        $autoRoutes = @($autoRoutes | Sort-Object -Unique)
     } catch { Write-Warn "could not discover routes from gateway ($_) - using auto only" }
     if ($autoRoutes.Count -eq 0) { $autoRoutes = @('auto') }
     $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue $autoRoutes -Force
-    Write-Ok "availableModels -> $($autoRoutes.Count) routes (auto + nvidia-alive + opencode-free + openrouter:free) in the /model picker"
+    Write-Ok "availableModels -> $($autoRoutes.Count) routes (auto/* majors + combo/* + nvidia-alive + opencode-free + openrouter:free) in the /model picker"
 
     # Claude Code caches the gateway model catalog in ~/.claude/cache, and when
     # it REFETCHES the catalog itself it filters it to claude-named models

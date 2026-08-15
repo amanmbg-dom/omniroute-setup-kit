@@ -11,7 +11,7 @@ get the entire working free-model gateway:
   work
 - **Cookie Pusher extension** — grabs your signed-in sessions for 24
   web-cookie providers (HuggingChat, Gemini Web, Qwen, Z.ai, Yuanbao, Arena,
-  Meta AI, t3.chat, ChatGPT, Grok, Perplexity…) and pushes them in, with
+  Meta AI, DeepSeek, t3.chat, ChatGPT, Grok, Perplexity…) and pushes them in, with
   auto-refresh so expired sessions re-push themselves
 - **`auto` fallback pool** — keyless providers (felo, opencode built-in, agy,
   blackbox, duckduckgo-web, friendliai)
@@ -198,6 +198,10 @@ OmniRoute API key, or use the model names directly:
   `auto/best-vision` — smart aliases over the whole free pool
 - `auto/coding:reliable` — **the default**: health-scored routing that skips
   dead/failed providers (fixes "hitting dead NIM models over and over")
+- `combo/qwen` / `combo/glm` / `combo/deepseek` / `combo/lmarena` — per-family
+  routing routes over the cookie/web providers: pick the flagship model of the
+  family, auto-falling back down its live model list (all thinking levels for
+  lmarena, instant/expert/think/search for deepseek, all GLM / Qwen models)
 
 ## Claude Code
 
@@ -235,7 +239,20 @@ ANTHROPIC_MODEL=nvidia/nvidia/nemotron-ultra-550b claude
 The `/model` picker shows **every `auto/` route** (reliable, best-coding,
 best-vision, best-fast, best-chat, per-family routes like `auto/glm` /
 `auto/minimax` / `auto/zai`, chaos, offline… — 38 in total) via
-`availableModels`. If a picker ever looks empty or partial, the model cache is
+`availableModels`. `fix-model-cache.ps1` mirrors those `auto/*` majors into
+`availableModels`, so the **VS Code** extension's model picker lists the same
+routes as the terminal `/model` picker.
+
+**Per-family routing routes** — `fix-model-cache.ps1` also creates
+`combo/*` routes for the cookie/web providers (`combo/qwen`, `combo/glm`,
+`combo/deepseek`, `combo/lmarena`) via the dashboard API. Each picks the best
+live model of its family (flagship first, then every chat-capable route of that
+provider), so `combo/qwen` auto-falls-back across qwen3.8-max → qwen3.7-max →
+qwen3.7-plus, `combo/deepseek` across v4-pro → v4-flash → chat/reasoner/R1,
+and `combo/glm` / `combo/lmarena` across the whole GLM and arena model lists
+(including the `-low/-medium/-high/-xhigh` thinking levels — "fast/slow").
+They're mirrored into `availableModels` too, so the picker lists them like any
+other route. If a picker ever looks empty or partial, the model cache is
 stale — clear `~/.claude/cache/gateway-models.json` (setup.ps1 does this
 automatically) and restart Claude Code.
 

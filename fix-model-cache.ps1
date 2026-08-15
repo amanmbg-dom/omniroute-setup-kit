@@ -1,9 +1,12 @@
 <#
 .SYNOPSIS
-  Seed Claude Code's gateway-model cache so the /model picker shows the single
-  "auto" route, the ALIVE NVIDIA NIM (nvidia/*) direct models, and the free
-  OpenCode Zen routes (opencode-zen/*-free, oc/*-free, big-pickle) - and keep it
-  that way across re-runs.
+  One command that (1) creates the per-family combo/* routing routes for the
+  cookie/web providers (combo/qwen, combo/glm, combo/deepseek, combo/lmarena)
+  via the dashboard API, (2) seeds Claude Code's gateway-model cache so the
+  /model picker shows the "auto" majors + combo/* routes + ALIVE NVIDIA NIM
+  (nvidia/*) + the free OpenCode Zen routes (opencode-zen/*-free, oc/*-free,
+  big-pickle) + the web-cookie chat routes, and (3) mirrors all of it into
+  availableModels - and keeps it that way across re-runs.
 .DESCRIPTION
   Claude Code caches the gateway catalog in ~/.claude/cache/gateway-models.json,
   but when it refetches the catalog itself it filters it to claude-named models.
@@ -84,8 +87,14 @@ $deadPattern = 'embed|rerank|asr|tts|whisper|fastpitch|tacotron|nvclip|flux|pars
 # ---- 2. discover routes from the live gateway ----
 Write-Host "Fetching catalog from $Base/v1/models ..." -ForegroundColor Cyan
 $catalog = Invoke-RestMethod -Uri "$Base/v1/models" -Headers @{ Authorization = "Bearer $Token" } -TimeoutSec 60
-# single bare "auto" route (auto-selects best available model) - NOT the auto/* aliases
+# bare "auto" route (auto-selects best available model) PLUS the auto/* "majors"
+# (auto/coding:reliable, auto/best-coding, auto/best-fast, auto/best-vision,
+# auto/best-reasoning, per-family auto/glm / auto/minimax / auto/zai, chaos,
+# offline, ...) from the live catalog. The majors are the gateway's flagship
+# routing routes; they are mirrored into availableModels below so the VS Code
+# /model picker shows the same majors as the terminal picker.
 $auto   = @('auto')
+$autoMajors = @($catalog.data | ForEach-Object { $_.id } | Where-Object { $_ -like 'auto/*' } | Sort-Object)
 $nvidia = @($catalog.data | ForEach-Object { $_.id } | Where-Object {
     $_ -like 'nvidia/*' -and
     $_ -notin $nvidiaDead -and
@@ -97,14 +106,15 @@ $ocFree = @($catalog.data | ForEach-Object { $_.id } | Where-Object {
 } | Sort-Object)
 # OpenRouter free tier: :free suffix (e.g. openrouter/nvidia/nemotron-3-ultra-550b-a55b:free)
 $orFree = @($catalog.data | ForEach-Object { $_.id } | Where-Object { $_ -like 'openrouter/*' -and $_ -like '*:free' } | Sort-Object)
-# Cookie/web providers (qwen-web, zai-web, lmarena) - chat-capable routes only.
-# These were fixed 2026-08-14: qwen-web (real bx-umidtoken + ls+header cookie, chat
-# reuse) and zai-web (SPA X-Signature + Aliyun traceless captcha worker) stream real
-# content; lmarena no longer crashes the stream watcher (needs a logged-in re-grab
-# of the arena session cookie to actually answer). Image/video/multimodal-gen ids are
-# excluded so the picker only shows routes that answer /v1/chat/completions.
+# Cookie/web providers (qwen-web, zai-web, lmarena, deepseek-web) - chat-capable
+# routes only. These were fixed 2026-08-14/15: qwen-web (real bx-umidtoken + ls+header
+# cookie, chat reuse), zai-web (SPA X-Signature + Aliyun traceless captcha worker) and
+# lmarena (fresh arena session cookie + recaptcha) stream real content; deepseek-web
+# (userToken localStorage) added once the logged-in session was pushed. Image/video/
+# multimodal-gen ids are excluded so the picker only shows routes that answer
+# /v1/chat/completions.
 $webChat = @($catalog.data | ForEach-Object { $_.id } | Where-Object {
-    $_ -like 'qwen-web/*' -or $_ -like 'zai-web/*' -or $_ -like 'lmarena/*' -or $_ -like 'no-think/lmarena/*'
+    $_ -like 'qwen-web/*' -or $_ -like 'zai-web/*' -or $_ -like 'lmarena/*' -or $_ -like 'no-think/lmarena/*' -or $_ -like 'deepseek-web/*'
 } | Where-Object {
     $_ -notmatch 'flux|seedream|ideogram|krea|recraft|qwen-image|wan[0-9]|photon|hidream|gpt-image|image-preview|mimo|cosmos|mercury|detector|embed|rerank'
 } | Sort-Object)
@@ -122,7 +132,62 @@ $curated = @(
 )
 # keep only curated ids that the gateway actually exposes (harmless if a provider is unkeyed)
 $curated = @($curated | Where-Object { $_ -in @($catalog.data | ForEach-Object { $_.id }) })
-$models = @($auto + $nvidia + $ocFree + $orFree + $webChat + $curated | Sort-Object -Unique)
+
+# ---- 2.5. ensure per-family combo/* routes (combo/qwen, combo/glm, combo/deepseek,
+#      combo/lmarena) via the dashboard API. The built-in auto/* majors are fixed;
+#      a combo is the gateway-native way to get a per-family routing route that
+#      picks the best live model from a web/cookie provider family (priority
+#      order, flagship first, fallback down the list). Idempotent: existing combos
+#      are left alone, missing ones are created. Requires a management token - the
+#      Cookie Pusher's per-machine admin key (minted by setup.ps1) is used, with
+#      the script's -Token as fallback.
+$comboFamilies = [ordered]@{
+    qwen     = @('qwen-web/qwen3.8-max','qwen-web/qwen3.7-max','qwen-web/qwen3.7-plus')
+    glm      = @('zai-web/glm-5.2','zai-web/GLM-5.1','zai-web/GLM-5-Turbo','zai-web/GLM-5v-Turbo','zai-web/glm-4.7','zai-web/glm-4.6v','zai-web/GLM-4.1V-Thinking-FlashX','zai-web/glm-4-flash','zai-web/glm-4-air-250414','zai-web/deep-research','zai-web/zero')
+    deepseek = @('deepseek-web/deepseek-v4-pro','deepseek-web/deepseek-v4-pro-think','deepseek-web/deepseek-v4-flash','deepseek-web/deepseek-v4-flash-think','deepseek-web/deepseek-chat','deepseek-web/deepseek-reasoner','deepseek-web/DeepSeek-V3.2','deepseek-web/DeepSeek-R1')
+    lmarena  = @('lmarena/claude-sonnet-5','lmarena/claude-sonnet-5-high','lmarena/claude-opus-5','lmarena/claude-opus-5-high','lmarena/claude-haiku-4-5-20251001','lmarena/glm-5.1','lmarena/deepseek-v4-pro','lmarena/deepseek-v4-flash','lmarena/gpt-5.2-high','lmarena/gemini-3.1-pro')
+}
+$adminToken = $Token
+$extConfig = Join-Path $HOME 'omniroute-cookie-pusher\config.js'
+if (Test-Path $extConfig) {
+    $cfgJs = Get-Content $extConfig -Raw
+    if ($cfgJs -match "DEFAULT_API_KEY\s*=\s*'([^']+)'") { $adminToken = $Matches[1] }
+}
+$catalogIds = @($catalog.data | ForEach-Object { $_.id })
+$comboRoutes = @()
+$combosApi = "$Base/api/combos"
+try {
+    $existingNames = @()
+    try {
+        $existingNames = @(((Invoke-RestMethod -Uri $combosApi -Headers @{ Authorization = "Bearer $adminToken" } -TimeoutSec 30).combos) | ForEach-Object { $_.name })
+    } catch { $existingNames = @() }
+    foreach ($name in $comboFamilies.Keys) {
+        # flagship-first order, filtered to ids the live catalog actually serves,
+        # then append the family's remaining chat routes (so the route covers ALL
+        # live models of that family, best-first).
+        $ordered = @($comboFamilies[$name] | Where-Object { $_ -in $catalogIds })
+        $familyPrefix = (($comboFamilies[$name][0] -split '/')[0]) + '/*'
+        $rest = @($webChat | Where-Object { $_ -like $familyPrefix -and $_ -notin $ordered } | Sort-Object)
+        $modelIds = @($ordered + $rest | Select-Object -Unique)
+        if ($modelIds.Count -eq 0) { continue }
+        if ($name -in $existingNames) {
+            Write-Host "combo/$name exists ($($modelIds.Count) live models)" -ForegroundColor DarkGray
+        } else {
+            $body = @{ name = $name; models = $modelIds; strategy = 'priority' } | ConvertTo-Json -Depth 4
+            try {
+                Invoke-RestMethod -Uri $combosApi -Method Post -Headers @{ Authorization = "Bearer $adminToken" } -ContentType 'application/json' -Body $body -TimeoutSec 30 | Out-Null
+                Write-Host "combo/$name created ($($modelIds.Count) live models)" -ForegroundColor Green
+            } catch {
+                Write-Host "combo/$name create failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+        $comboRoutes += "combo/$name"
+    }
+} catch {
+    Write-Host "combo route sync skipped (dashboard API unreachable): $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+$models = @($auto + $autoMajors + $nvidia + $ocFree + $orFree + $webChat + $comboRoutes + $curated | Sort-Object -Unique)
 if ($models.Count -eq 0) {
     Write-Host 'No routes discovered - gateway unreachable or catalog empty?' -ForegroundColor Red
     exit 1
@@ -142,9 +207,9 @@ $cache = [ordered]@{
 }
 $json = $cache | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($cacheFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "Cache seeded: $($auto.Count) auto + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena) + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
+Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majors + $($comboRoutes.Count) combo/* routes + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena/deepseek) + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
 
-# ---- 4. rebuild availableModels to match (drops old auto/* aliases + dead NIM) ----
+# ---- 4. rebuild availableModels to mirror the picker (auto/* majors kept, dead NIM dropped) ----
 $ccFile = Join-Path $HOME '.claude\settings.json'
 if (Test-Path $ccFile) {
     $cc = Get-Content $ccFile -Raw | ConvertFrom-Json
@@ -152,10 +217,12 @@ if (Test-Path $ccFile) {
     # keep: bare auto, alive nvidia, opencode free, openrouter free, curated free
     $keep = @($cur | Where-Object {
         $_ -eq 'auto' -or
+        $_ -like 'auto/*' -or
+        $_ -like 'combo/*' -or
         ($_ -like 'nvidia/*' -and $_ -notin $nvidiaDead -and $_ -notmatch $deadPattern) -or
         (($_ -like 'opencode-zen/*' -or $_ -like 'oc/*') -and ($_ -like '*-free' -or $_ -like '*/big-pickle')) -or
         ($_ -like 'openrouter/*' -and $_ -like '*:free') -or
-        ($_ -like 'qwen-web/*' -or $_ -like 'zai-web/*' -or $_ -like 'lmarena/*' -or $_ -like 'no-think/lmarena/*') -or
+        ($_ -like 'qwen-web/*' -or $_ -like 'zai-web/*' -or $_ -like 'lmarena/*' -or $_ -like 'no-think/lmarena/*' -or $_ -like 'deepseek-web/*') -or
         $_ -in $curated
     })
     $merged = @($keep + $models | Sort-Object -Unique)
@@ -163,11 +230,11 @@ if (Test-Path $ccFile) {
         $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue $merged -Force
         $json = $cc | ConvertTo-Json -Depth 12
         [System.IO.File]::WriteAllText($ccFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-        Write-Host "availableModels rebuilt -> $($merged.Count) routes (old auto/* aliases and dead NIM removed)" -ForegroundColor Green
+        Write-Host "availableModels rebuilt -> $($merged.Count) routes (auto/* majors + combo/* routes mirrored, dead NIM removed)" -ForegroundColor Green
     }
 }
 
 Write-Host ''
 Write-Host 'Done. Now FULLY quit VS Code and Claude Desktop (all windows, and' -ForegroundColor Yellow
-Write-Host 'taskbar/processes) and reopen - the picker will show auto + NIM + OpenCode free +' -ForegroundColor Yellow
-Write-Host 'OpenRouter free + qwen-web/zai-web/lmarena (chat) routes.' -ForegroundColor Yellow
+Write-Host 'taskbar/processes) and reopen - the picker will show auto + auto/* majors + combo/* + NIM +' -ForegroundColor Yellow
+Write-Host 'OpenCode free + OpenRouter free + qwen-web/zai-web/lmarena/deepseek-web (chat) routes.' -ForegroundColor Yellow
