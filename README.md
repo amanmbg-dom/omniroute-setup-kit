@@ -202,6 +202,9 @@ OmniRoute API key, or use the model names directly:
   routing routes over the cookie/web providers: pick the flagship model of the
   family, auto-falling back down its live model list (all thinking levels for
   lmarena, instant/expert/think/search for deepseek, all GLM / Qwen models)
+- `combo/lmarena-fast` / `combo/lmarena-slow` — arena by thinking speed:
+  `-fast` routes only the `-low`/`-medium` (fast) thinking levels,
+  `-slow` only the `-high`/`-xhigh` (slow) ones, so you pick speed explicitly
 
 ## Claude Code
 
@@ -245,16 +248,19 @@ routes as the terminal `/model` picker.
 
 **Per-family routing routes** — `fix-model-cache.ps1` also creates
 `combo/*` routes for the cookie/web providers (`combo/qwen`, `combo/glm`,
-`combo/deepseek`, `combo/lmarena`) via the dashboard API. Each picks the best
-live model of its family (flagship first, then every chat-capable route of that
-provider), so `combo/qwen` auto-falls-back across qwen3.8-max → qwen3.7-max →
-qwen3.7-plus, `combo/deepseek` across v4-pro → v4-flash → chat/reasoner/R1,
-and `combo/glm` / `combo/lmarena` across the whole GLM and arena model lists
-(including the `-low/-medium/-high/-xhigh` thinking levels — "fast/slow").
-They're mirrored into `availableModels` too, so the picker lists them like any
-other route. If a picker ever looks empty or partial, the model cache is
-stale — clear `~/.claude/cache/gateway-models.json` (setup.ps1 does this
-automatically) and restart Claude Code.
+`combo/deepseek`, `combo/lmarena`, plus `combo/lmarena-fast` and
+`combo/lmarena-slow` for arena by thinking speed) via the dashboard API. Each
+picks the best live model of its family (flagship first, then every chat-capable
+route of that provider), so `combo/qwen` auto-falls-back across qwen3.8-max →
+qwen3.7-max → qwen3.7-plus, `combo/deepseek` across v4-pro → v4-flash →
+chat/reasoner/R1, and `combo/glm` / `combo/lmarena` across the whole GLM and
+arena model lists (including the `-low/-medium/-high/-xhigh` thinking levels —
+"fast/slow"). `combo/lmarena-fast` restricts to the `-low`/`-medium` arena
+levels and `combo/lmarena-slow` to the `-high`/`-xhigh` ones, so you can route
+by speed explicitly. They're mirrored into `availableModels` too, so the picker
+lists them like any other route. If a picker ever looks empty or partial, the
+model cache is stale — clear `~/.claude/cache/gateway-models.json` (setup.ps1
+does this automatically) and restart Claude Code.
 
 Skip with `-SkipClaudeCode` if you want to leave Claude Code alone.
 

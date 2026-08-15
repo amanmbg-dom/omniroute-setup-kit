@@ -146,6 +146,12 @@ $comboFamilies = [ordered]@{
     glm      = @('zai-web/glm-5.2','zai-web/GLM-5.1','zai-web/GLM-5-Turbo','zai-web/GLM-5v-Turbo','zai-web/glm-4.7','zai-web/glm-4.6v','zai-web/GLM-4.1V-Thinking-FlashX','zai-web/glm-4-flash','zai-web/glm-4-air-250414','zai-web/deep-research','zai-web/zero')
     deepseek = @('deepseek-web/deepseek-v4-pro','deepseek-web/deepseek-v4-pro-think','deepseek-web/deepseek-v4-flash','deepseek-web/deepseek-v4-flash-think','deepseek-web/deepseek-chat','deepseek-web/deepseek-reasoner','deepseek-web/DeepSeek-V3.2','deepseek-web/DeepSeek-R1')
     lmarena  = @('lmarena/claude-sonnet-5','lmarena/claude-sonnet-5-high','lmarena/claude-opus-5','lmarena/claude-opus-5-high','lmarena/claude-haiku-4-5-20251001','lmarena/glm-5.1','lmarena/deepseek-v4-pro','lmarena/deepseek-v4-flash','lmarena/gpt-5.2-high','lmarena/gemini-3.1-pro')
+    # lmarena thinking-speed combos, derived from the live arena chat list by
+    # thinking-level suffix: -low/-medium = fast, -high/-xhigh = slow. Base ids
+    # (no suffix) have no explicit speed level and stay in combo/lmarena (the
+    # catch-all) - the speed combos are picked explicitly by the user.
+    'lmarena-fast' = @($webChat | Where-Object { $_ -like 'lmarena/*' -and $_ -match '-(low|medium)$' } | Sort-Object)
+    'lmarena-slow' = @($webChat | Where-Object { $_ -like 'lmarena/*' -and $_ -match '-(high|xhigh)$' } | Sort-Object)
 }
 $adminToken = $Token
 $extConfig = Join-Path $HOME 'omniroute-cookie-pusher\config.js'
@@ -162,13 +168,20 @@ try {
         $existingNames = @(((Invoke-RestMethod -Uri $combosApi -Headers @{ Authorization = "Bearer $adminToken" } -TimeoutSec 30).combos) | ForEach-Object { $_.name })
     } catch { $existingNames = @() }
     foreach ($name in $comboFamilies.Keys) {
-        # flagship-first order, filtered to ids the live catalog actually serves,
-        # then append the family's remaining chat routes (so the route covers ALL
-        # live models of that family, best-first).
-        $ordered = @($comboFamilies[$name] | Where-Object { $_ -in $catalogIds })
-        $familyPrefix = (($comboFamilies[$name][0] -split '/')[0]) + '/*'
-        $rest = @($webChat | Where-Object { $_ -like $familyPrefix -and $_ -notin $ordered } | Sort-Object)
-        $modelIds = @($ordered + $rest | Select-Object -Unique)
+        if ($name -like 'lmarena-*') {
+            # thinking-speed combos are already the complete filtered list - do
+            # NOT append the family's other models (that would pull in the other
+            # speed's thinking levels).
+            $modelIds = @($comboFamilies[$name] | Where-Object { $_ -in $catalogIds } | Sort-Object)
+        } else {
+            # flagship-first order, filtered to ids the live catalog actually serves,
+            # then append the family's remaining chat routes (so the route covers ALL
+            # live models of that family, best-first).
+            $ordered = @($comboFamilies[$name] | Where-Object { $_ -in $catalogIds })
+            $familyPrefix = (($comboFamilies[$name][0] -split '/')[0]) + '/*'
+            $rest = @($webChat | Where-Object { $_ -like $familyPrefix -and $_ -notin $ordered } | Sort-Object)
+            $modelIds = @($ordered + $rest | Select-Object -Unique)
+        }
         if ($modelIds.Count -eq 0) { continue }
         if ($name -in $existingNames) {
             Write-Host "combo/$name exists ($($modelIds.Count) live models)" -ForegroundColor DarkGray
