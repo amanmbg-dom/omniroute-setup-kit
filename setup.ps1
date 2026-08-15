@@ -560,7 +560,7 @@ if (-not $SkipClaudeCode) {
         # combo/* family routes (combo/qwen, combo/glm, combo/deepseek, combo/lmarena)
         # are created by fix-model-cache.ps1 below and are NOT in the /v1/models
         # catalog, so mirror them explicitly into the picker allowlist.
-        $autoRoutes = @('auto') + $autoRoutes + @('combo/qwen','combo/glm','combo/deepseek','combo/lmarena','combo/lmarena-fast','combo/lmarena-slow')
+        $autoRoutes = @('auto') + $autoRoutes + @('combo/qwen','combo/glm','combo/deepseek','combo/lmarena','combo/lmarena-fast','combo/lmarena-slow','combo/mimo')
         $autoRoutes = @($autoRoutes | Sort-Object -Unique)
     } catch { Write-Warn "could not discover routes from gateway ($_) - using auto only" }
     if ($autoRoutes.Count -eq 0) { $autoRoutes = @('auto') }

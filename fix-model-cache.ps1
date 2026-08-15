@@ -106,6 +106,10 @@ $ocFree = @($catalog.data | ForEach-Object { $_.id } | Where-Object {
 } | Sort-Object)
 # OpenRouter free tier: :free suffix (e.g. openrouter/nvidia/nemotron-3-ultra-550b-a55b:free)
 $orFree = @($catalog.data | ForEach-Object { $_.id } | Where-Object { $_ -like 'openrouter/*' -and $_ -like '*:free' } | Sort-Object)
+# Xiaomi MiMo open-source V2.5/V2.5-Pro across every provider that serves the
+# open weights (NOT the subscription "Claw" flagship). Kept in the picker so the
+# raw routes are selectable alongside combo/mimo.
+$mimo = @($catalog.data | ForEach-Object { $_.id } | Where-Object { $_ -match 'mimo' } | Sort-Object)
 # Cookie/web providers (qwen-web, zai-web, lmarena, deepseek-web) - chat-capable
 # routes only. These were fixed 2026-08-14/15: qwen-web (real bx-umidtoken + ls+header
 # cookie, chat reuse), zai-web (SPA X-Signature + Aliyun traceless captcha worker) and
@@ -152,6 +156,11 @@ $comboFamilies = [ordered]@{
     # catch-all) - the speed combos are picked explicitly by the user.
     'lmarena-fast' = @($webChat | Where-Object { $_ -like 'lmarena/*' -and $_ -match '-(low|medium)$' } | Sort-Object)
     'lmarena-slow' = @($webChat | Where-Object { $_ -like 'lmarena/*' -and $_ -match '-(high|xhigh)$' } | Sort-Object)
+    # Xiaomi MiMo open-source V2.5 / V2.5-Pro (NOT the "Claw" flagship - that one
+    # is subscription-limited to ~4h usage/day). Spans many free providers
+    # (opencode-zen/oc free tier, openrouter, lmarena, llm7, huggingchat/hf,
+    # mcode), all of which serve the same open weights.
+    mimo = @('oc/mimo-v2.5-free','opencode-zen/mimo-v2.5-free','openrouter/xiaomi/mimo-v2.5','openrouter/xiaomi/mimo-v2.5-pro','lmarena/mimo-v2.5','lmarena/mimo-v2.5-pro','llm7/XiaomiMiMo/MiMo-V2.5','llm7/XiaomiMiMo/MiMo-V2.5-Pro','huggingchat/XiaomiMiMo/MiMo-V2.5','huggingchat/XiaomiMiMo/MiMo-V2.5-Pro','hf/XiaomiMiMo/MiMo-V2.5','hf/XiaomiMiMo/MiMo-V2.5-Pro','mcode/mimo-auto')
 }
 $adminToken = $Token
 $extConfig = Join-Path $HOME 'omniroute-cookie-pusher\config.js'
@@ -168,7 +177,13 @@ try {
         $existingNames = @(((Invoke-RestMethod -Uri $combosApi -Headers @{ Authorization = "Bearer $adminToken" } -TimeoutSec 30).combos) | ForEach-Object { $_.name })
     } catch { $existingNames = @() }
     foreach ($name in $comboFamilies.Keys) {
-        if ($name -like 'lmarena-*') {
+        if ($name -eq 'mimo') {
+            # mimo spans MANY provider prefixes, so append every mimo route the
+            # live catalog serves (across oc/openrouter/lmarena/llm7/hf/mcode),
+            # not just one family prefix - flagship-first then the rest.
+            $modelIds = @($comboFamilies[$name] | Where-Object { $_ -in $catalogIds })
+            $modelIds = @($modelIds + @($catalogIds | Where-Object { $_ -match 'mimo' -and $_ -notin $modelIds }) | Select-Object -Unique | Sort-Object)
+        } elseif ($name -like 'lmarena-*') {
             # thinking-speed combos are already the complete filtered list - do
             # NOT append the family's other models (that would pull in the other
             # speed's thinking levels).
@@ -200,7 +215,7 @@ try {
     Write-Host "combo route sync skipped (dashboard API unreachable): $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
-$models = @($auto + $autoMajors + $nvidia + $ocFree + $orFree + $webChat + $comboRoutes + $curated | Sort-Object -Unique)
+$models = @($auto + $autoMajors + $nvidia + $ocFree + $orFree + $webChat + $mimo + $comboRoutes + $curated | Sort-Object -Unique)
 if ($models.Count -eq 0) {
     Write-Host 'No routes discovered - gateway unreachable or catalog empty?' -ForegroundColor Red
     exit 1
@@ -220,7 +235,7 @@ $cache = [ordered]@{
 }
 $json = $cache | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($cacheFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majors + $($comboRoutes.Count) combo/* routes + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena/deepseek) + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
+Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majors + $($comboRoutes.Count) combo/* routes + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena/deepseek) + $($mimo.Count) mimo + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
 
 # ---- 4. rebuild availableModels to mirror the picker (auto/* majors kept, dead NIM dropped) ----
 $ccFile = Join-Path $HOME '.claude\settings.json'
@@ -235,6 +250,7 @@ if (Test-Path $ccFile) {
         ($_ -like 'nvidia/*' -and $_ -notin $nvidiaDead -and $_ -notmatch $deadPattern) -or
         (($_ -like 'opencode-zen/*' -or $_ -like 'oc/*') -and ($_ -like '*-free' -or $_ -like '*/big-pickle')) -or
         ($_ -like 'openrouter/*' -and $_ -like '*:free') -or
+        ($_ -match 'mimo') -or
         ($_ -like 'qwen-web/*' -or $_ -like 'zai-web/*' -or $_ -like 'lmarena/*' -or $_ -like 'no-think/lmarena/*' -or $_ -like 'deepseek-web/*') -or
         $_ -in $curated
     })

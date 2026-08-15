@@ -205,6 +205,10 @@ OmniRoute API key, or use the model names directly:
 - `combo/lmarena-fast` / `combo/lmarena-slow` — arena by thinking speed:
   `-fast` routes only the `-low`/`-medium` (fast) thinking levels,
   `-slow` only the `-high`/`-xhigh` (slow) ones, so you pick speed explicitly
+- `combo/mimo` — Xiaomi MiMo open-source V2.5 / V2.5-Pro (the free open weights,
+  **not** the subscription "Claw" flagship with its ~4h/day usage cap), routed
+  across every provider that serves them (opencode-zen/oc free tier, openrouter,
+  lmarena, llm7, huggingchat/hf, mcode)
 
 ## Claude Code
 
@@ -263,6 +267,34 @@ model cache is stale — clear `~/.claude/cache/gateway-models.json` (setup.ps1
 does this automatically) and restart Claude Code.
 
 Skip with `-SkipClaudeCode` if you want to leave Claude Code alone.
+
+## Using the models in OTHER apps (not just Claude Code)
+
+The gateway speaks standard **OpenAI-compatible** APIs, so any app that lets you
+point it at a custom endpoint (chat UIs, IDEs, scripts, other agents) can use
+the same free pool:
+
+```
+Base URL : http://localhost:20128/v1          (or http://<vps>:20128/v1)
+API key  : omniroute                           (or your minted key)
+Model    : any id from http://localhost:20128/v1/models
+```
+
+- **Chat completions** — OpenAI SDK / curl `POST /v1/chat/completions` (this is
+  exactly what every probe above uses):
+  ```bash
+  curl http://localhost:20128/v1/chat/completions \
+    -H "Authorization: Bearer omniroute" -H "Content-Type: application/json" \
+    -d '{"model":"auto/coding:reliable","messages":[{"role":"user","content":"hello"}]}'
+  ```
+- **Anthropic-format** (`POST /v1/messages`) — for apps that speak Claude's API.
+- **Images** — `POST /v1/images/generations` (e.g. `flowui/nano-banana-2`).
+
+Set the model to any picker entry: `auto/best-coding`, `auto/coding:reliable`,
+`nvidia/nvidia/nemotron-ultra-550b`, `combo/qwen`, `combo/mimo`, … For apps that
+have a model dropdown but no free-text field, add the id to their custom-model
+list and pick it. The gateway is OpenAI-compatible end to end, so everything
+Claude Code can reach is reachable the same way from any other tool.
 
 ## Claude Desktop (official app — no extension)
 
