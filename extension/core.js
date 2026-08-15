@@ -22,8 +22,8 @@ export const PROVIDERS = [
   { id: 'lmarena', label: 'Arena', mode: 'header', domain: 'arena.ai', free: true },
   { id: 'muse-spark-web', label: 'Meta AI Muse', mode: 'header', domain: 'meta.ai', free: true },
   { id: 'zenmux-free', label: 'ZenMux', mode: 'header', domain: 'zenmux.ai', free: true },
-  { id: 'qwen-web', label: 'Qwen Web', mode: 'ls-or-cookie', domain: 'chat.qwen.ai',
-    lsKey: 'token', cookieName: 'tongyi_sso_ticket', cookieValue: true, free: true },
+  { id: 'qwen-web', label: 'Qwen Web', mode: 'ls+header', domain: 'chat.qwen.ai',
+    lsKey: 'token', free: true },
   { id: 't3-web', label: 't3.chat', mode: 'ls+header', domain: 't3.chat',
     lsKey: 'convex-session-id', free: true },
 

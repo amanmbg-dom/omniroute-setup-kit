@@ -211,7 +211,7 @@ the original is backed up to `settings.json.bak-kit`):
 | `ANTHROPIC_AUTH_TOKEN` | `omniroute` | the gateway's localhost magic token — no secret stored in settings.json |
 | `ANTHROPIC_MODEL` | `auto/coding:reliable` | default model — the reliability-first auto combo: it scores providers by health and auto-falls-back when a model is dead, so NIM outages never interrupt a session (any `nvidia/…`, `opencode-zen/…`, `auto/best-*` also works) |
 | `ANTHROPIC_SMALL_FAST_MODEL` | `auto/best-fast` | background/summarization tasks |
-| `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `1` | lets `/model` list the gateway's live catalog (all **38 `auto/` routes** are exposed in the picker) |
+| `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | *(not set)* | Intentionally OFF: it makes Claude Code refetch the live catalog on every start and filter it to claude-named models, clobbering the curated cache and collapsing `/model` to just Default. The picker list is driven by `availableModels` instead (see `fix-model-cache.ps1`) |
 | `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT` | `1` | stops window enforcement errors on non-Claude models |
 
 Then just run `claude` in any folder — traffic goes to the free pool. Switch

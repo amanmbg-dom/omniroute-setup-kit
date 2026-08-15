@@ -97,7 +97,32 @@ $ocFree = @($catalog.data | ForEach-Object { $_.id } | Where-Object {
 } | Sort-Object)
 # OpenRouter free tier: :free suffix (e.g. openrouter/nvidia/nemotron-3-ultra-550b-a55b:free)
 $orFree = @($catalog.data | ForEach-Object { $_.id } | Where-Object { $_ -like 'openrouter/*' -and $_ -like '*:free' } | Sort-Object)
-$models = @($auto + $nvidia + $ocFree + $orFree | Sort-Object -Unique)
+# Cookie/web providers (qwen-web, zai-web, lmarena) - chat-capable routes only.
+# These were fixed 2026-08-14: qwen-web (real bx-umidtoken + ls+header cookie, chat
+# reuse) and zai-web (SPA X-Signature + Aliyun traceless captcha worker) stream real
+# content; lmarena no longer crashes the stream watcher (needs a logged-in re-grab
+# of the arena session cookie to actually answer). Image/video/multimodal-gen ids are
+# excluded so the picker only shows routes that answer /v1/chat/completions.
+$webChat = @($catalog.data | ForEach-Object { $_.id } | Where-Object {
+    $_ -like 'qwen-web/*' -or $_ -like 'zai-web/*' -or $_ -like 'lmarena/*' -or $_ -like 'no-think/lmarena/*'
+} | Where-Object {
+    $_ -notmatch 'flux|seedream|ideogram|krea|recraft|qwen-image|wan[0-9]|photon|hidream|gpt-image|image-preview|mimo|cosmos|mercury|detector|embed|rerank'
+} | Sort-Object)
+# Curated free/working models from the other keyed providers (verified live against
+# /v1/messages on 2026-08-14 with real keys - a mix of fast + capable free models).
+# Casing matters for HuggingFace (HF router is case-sensitive on model ids).
+$curated = @(
+    'groq/llama-3.1-8b-instant',
+    'mistral/mistral-medium-2505',
+    'aion/aion-labs/aion-2.0',
+    'cohere/command-a-03-2025',
+    'nscale/openai/gpt-oss-20b',
+    'ollama-cloud/gpt-oss:20b',
+    'huggingface/meta-llama/Llama-3.1-8B-Instruct'
+)
+# keep only curated ids that the gateway actually exposes (harmless if a provider is unkeyed)
+$curated = @($curated | Where-Object { $_ -in @($catalog.data | ForEach-Object { $_.id }) })
+$models = @($auto + $nvidia + $ocFree + $orFree + $webChat + $curated | Sort-Object -Unique)
 if ($models.Count -eq 0) {
     Write-Host 'No routes discovered - gateway unreachable or catalog empty?' -ForegroundColor Red
     exit 1
@@ -117,19 +142,21 @@ $cache = [ordered]@{
 }
 $json = $cache | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($cacheFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "Cache seeded: $($auto.Count) auto + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free -> $cacheFile" -ForegroundColor Green
+Write-Host "Cache seeded: $($auto.Count) auto + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena) + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
 
 # ---- 4. rebuild availableModels to match (drops old auto/* aliases + dead NIM) ----
 $ccFile = Join-Path $HOME '.claude\settings.json'
 if (Test-Path $ccFile) {
     $cc = Get-Content $ccFile -Raw | ConvertFrom-Json
     $cur = @($cc.availableModels)
-    # keep: bare auto, alive nvidia, opencode free, openrouter free
+    # keep: bare auto, alive nvidia, opencode free, openrouter free, curated free
     $keep = @($cur | Where-Object {
         $_ -eq 'auto' -or
         ($_ -like 'nvidia/*' -and $_ -notin $nvidiaDead -and $_ -notmatch $deadPattern) -or
         (($_ -like 'opencode-zen/*' -or $_ -like 'oc/*') -and ($_ -like '*-free' -or $_ -like '*/big-pickle')) -or
-        ($_ -like 'openrouter/*' -and $_ -like '*:free')
+        ($_ -like 'openrouter/*' -and $_ -like '*:free') -or
+        ($_ -like 'qwen-web/*' -or $_ -like 'zai-web/*' -or $_ -like 'lmarena/*' -or $_ -like 'no-think/lmarena/*') -or
+        $_ -in $curated
     })
     $merged = @($keep + $models | Sort-Object -Unique)
     if ($merged.Count -ne $cur.Count) {
@@ -142,4 +169,5 @@ if (Test-Path $ccFile) {
 
 Write-Host ''
 Write-Host 'Done. Now FULLY quit VS Code and Claude Desktop (all windows, and' -ForegroundColor Yellow
-Write-Host 'taskbar/processes) and reopen - the picker will show auto + NIM + OpenCode free routes.' -ForegroundColor Yellow
+Write-Host 'taskbar/processes) and reopen - the picker will show auto + NIM + OpenCode free +' -ForegroundColor Yellow
+Write-Host 'OpenRouter free + qwen-web/zai-web/lmarena (chat) routes.' -ForegroundColor Yellow

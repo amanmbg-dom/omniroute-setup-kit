@@ -115,6 +115,7 @@ $GroqKey      = $cfg.GROQ_API_KEY
 $OrKey        = $cfg.OPENROUTER_API_KEY
 $GhModelsKey  = $cfg.GITHUB_MODELS_API_KEY
 $CfKey        = $cfg.CLOUDFLARE_API_KEY
+$CfAccountId  = $cfg.CLOUDFLARE_ACCOUNT_ID
 $MsKey        = $cfg.MODELSCOPE_API_KEY
 $Llm7Key      = $cfg.LLM7_API_KEY
 $OvhKey       = $cfg.OVHCLOUD_API_KEY
@@ -317,10 +318,32 @@ if (-not $SkipProviders) {
         if ($exists.Count -gt 0) {
             Write-Ok "$($sp.name): already configured (id $($exists[0].id))"
         } else {
-            $body = @{ provider = $sp.id; apiKey = $sp.key; name = $sp.name } | ConvertTo-Json
+            $bodyObj = @{ provider = $sp.id; apiKey = $sp.key; name = $sp.name }
+            # Cloudflare Workers AI builds its per-connection URL from the Account ID -
+            # the API token alone is not enough (502 without it).
+            if ($sp.id -eq 'cloudflare-ai' -and $CfAccountId) {
+                $bodyObj.providerSpecificData = @{ accountId = $CfAccountId }
+            }
+            $body = $bodyObj | ConvertTo-Json -Depth 5
             Invoke-RestMethod -Method Post -WebSession $sess -Uri "$Base/api/providers" `
                 -Body $body -ContentType 'application/json' -TimeoutSec 15 | Out-Null
             Write-Ok "$($sp.name): added"
+        }
+    }
+
+    # Cloudflare: if the connection already exists but was added before the Account
+    # ID plumbing, patch it so the 502 "requires an Account ID" goes away (idempotent).
+    if ($CfKey -and $CfAccountId) {
+        $cf = @($conns | Where-Object { $_.provider -eq 'cloudflare-ai' }) | Select-Object -First 1
+        if ($cf) {
+            $patch = @{ providerSpecificData = @{ accountId = $CfAccountId } } | ConvertTo-Json -Depth 5
+            try {
+                Invoke-RestMethod -Method Put -WebSession $sess -Uri "$Base/api/providers/$($cf.id)" `
+                    -Body $patch -ContentType 'application/json' -TimeoutSec 15 | Out-Null
+                Write-Ok 'cloudflare-ai: Account ID patched'
+            } catch {
+                Write-Warn 'cloudflare-ai: could not patch Account ID (set CLOUDFLARE_ACCOUNT_ID in config/local.env)'
+            }
         }
     }
 
@@ -498,7 +521,11 @@ if (-not $SkipClaudeCode) {
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_AUTH_TOKEN' -NotePropertyValue 'omniroute' -Force
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_MODEL' -NotePropertyValue 'auto/coding:reliable' -Force
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_SMALL_FAST_MODEL' -NotePropertyValue 'auto/best-fast' -Force
-    $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY' -NotePropertyValue '1' -Force
+    # NOTE: do NOT set CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY here. It makes
+    # Claude Code refetch the live gateway catalog on every startup and then
+    # filter it to claude-named models, which overwrites the curated
+    # gateway-models.json cache and collapses the /model picker to just Default.
+    # availableModels (below) is the native mechanism Claude Code honors instead.
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT' -NotePropertyValue '1' -Force
 
     # The /model picker shows only gateway-discovered models on this allowlist.
