@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-  One command that (1) creates the per-family combo/* routing routes for the
-  cookie/web providers (combo/qwen, combo/glm, combo/deepseek, combo/lmarena)
-  via the dashboard API, (2) seeds Claude Code's gateway-model cache so the
+  One command that (1) ensures the MiMo web bridge is running + registered,
+  (2) creates the per-family combo/* routing routes for the cookie/web
+  providers (combo/qwen, combo/glm, combo/deepseek, combo/lmarena, combo/mimo,
+  combo/mimo-web, combo/lmarena-fast/slow) via the dashboard API, (3) seeds Claude Code's gateway-model cache so the
   /model picker shows the "auto" majors + combo/* routes + ALIVE NVIDIA NIM
   (nvidia/*) + the free OpenCode Zen routes (opencode-zen/*-free, oc/*-free,
-  big-pickle) + the web-cookie chat routes, and (3) mirrors all of it into
+  big-pickle) + the web-cookie chat routes (incl. mimo-web/*), and (4) mirrors all of it into
   availableModels - and keeps it that way across re-runs.
 .DESCRIPTION
   Claude Code caches the gateway catalog in ~/.claude/cache/gateway-models.json,
@@ -84,6 +85,54 @@ if ($nvidiaDead.Count -eq 0) {
 # variants are already enumerated explicitly in config/nvidia-dead.json.
 $deadPattern = 'embed|rerank|asr|tts|whisper|fastpitch|tacotron|nvclip|flux|parse|detector|reward|neva|vila|kosmos|deplot|fuyu'
 
+# ---- 1.5. ensure the MiMo web bridge is running + registered ----
+# mimo-web is a local OpenAI-compatible bridge (bridge/mimo-web-bridge/bridge.mjs)
+# that translates OpenAI chat to the aistudio.xiaomimimo.com web API using your
+# session cookie (pushed by the Cookie Pusher -> Grab & push sessions). It must
+# be up BEFORE the catalog fetch below so the mimo-web/* routes are discovered.
+$bridgePort = 20135
+$bridgeUp = $false
+try {
+    $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$bridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
+    $bridgeUp = ($probe.StatusCode -eq 200)
+} catch { $bridgeUp = $false }
+if (-not $bridgeUp) {
+    $bridgeScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'bridge\mimo-web-bridge\bridge.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\bridge\mimo-web-bridge\bridge.mjs'),
+        (Join-Path $HOME '.omniroute\bridge\mimo-web-bridge\bridge.mjs')
+    )) { if (Test-Path $cand) { $bridgeScript = $cand; break } }
+    if ($bridgeScript) {
+        $bridgeLog = Join-Path $HOME '.omniroute\mimo-web-bridge.log'
+        Start-Process -FilePath 'node' -ArgumentList @($bridgeScript) -WindowStyle Hidden `
+            -RedirectStandardOutput $bridgeLog -RedirectStandardError $bridgeLog
+        Start-Sleep -Seconds 2
+        try {
+            $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$bridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
+            $bridgeUp = ($probe.StatusCode -eq 200)
+        } catch { $bridgeUp = $false }
+        if ($bridgeUp) { Write-Host "MiMo web bridge started ($bridgeScript)" -ForegroundColor Green }
+        else { Write-Host 'MiMo web bridge NOT running (node missing?) - mimo-web routes will not appear' -ForegroundColor Yellow }
+    } else {
+        Write-Host 'MiMo web bridge script not found - mimo-web routes skipped' -ForegroundColor Yellow
+    }
+} else {
+    Write-Host 'MiMo web bridge already running' -ForegroundColor DarkGray
+}
+if ($bridgeUp) {
+    $registerScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'bridge\mimo-web-bridge\register-mimo-web.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\bridge\mimo-web-bridge\register-mimo-web.mjs'),
+        (Join-Path $HOME '.omniroute\bridge\mimo-web-bridge\register-mimo-web.mjs')
+    )) { if (Test-Path $cand) { $registerScript = $cand; break } }
+    if ($registerScript) {
+        & node $registerScript | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Host 'mimo-web node + connection registered' -ForegroundColor DarkGray }
+    }
+}
+
 # ---- 2. discover routes from the live gateway ----
 Write-Host "Fetching catalog from $Base/v1/models ..." -ForegroundColor Cyan
 $catalog = Invoke-RestMethod -Uri "$Base/v1/models" -Headers @{ Authorization = "Bearer $Token" } -TimeoutSec 60
@@ -110,6 +159,21 @@ $orFree = @($catalog.data | ForEach-Object { $_.id } | Where-Object { $_ -like '
 # open weights (NOT the subscription "Claw" flagship). Kept in the picker so the
 # raw routes are selectable alongside combo/mimo.
 $mimo = @($catalog.data | ForEach-Object { $_.id } | Where-Object { $_ -match 'mimo' } | Sort-Object)
+# MiMo WEB routes via the local mimo-web bridge (aistudio.xiaomimimo.com session
+# cookie) - probed straight from the bridge, not the gateway catalog, because the
+# gateway only discovers openai-compatible node models lazily. The bridge answers
+# /v1/models with the live modelConfigList from /open-apis/bot/config.
+$mimoWeb = @()
+if ($bridgeUp) {
+    try {
+        $bridgeModels = Invoke-RestMethod -Uri "http://127.0.0.1:$bridgePort/v1/models" -TimeoutSec 10
+        $mimoWeb = @($bridgeModels.data | ForEach-Object { "mimo-web/$($_.id)" } | Sort-Object)
+        Write-Host "mimo-web routes from bridge: $($mimoWeb.Count)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "mimo-web bridge model probe failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        $mimoWeb = @()
+    }
+}
 # Cookie/web providers (qwen-web, zai-web, lmarena, deepseek-web) - chat-capable
 # routes only. These were fixed 2026-08-14/15: qwen-web (real bx-umidtoken + ls+header
 # cookie, chat reuse), zai-web (SPA X-Signature + Aliyun traceless captcha worker) and
@@ -161,6 +225,9 @@ $comboFamilies = [ordered]@{
     # (opencode-zen/oc free tier, openrouter, lmarena, llm7, huggingchat/hf,
     # mcode), all of which serve the same open weights.
     mimo = @('oc/mimo-v2.5-free','opencode-zen/mimo-v2.5-free','openrouter/xiaomi/mimo-v2.5','openrouter/xiaomi/mimo-v2.5-pro','lmarena/mimo-v2.5','lmarena/mimo-v2.5-pro','llm7/XiaomiMiMo/MiMo-V2.5','llm7/XiaomiMiMo/MiMo-V2.5-Pro','huggingchat/XiaomiMiMo/MiMo-V2.5','huggingchat/XiaomiMiMo/MiMo-V2.5-Pro','hf/XiaomiMiMo/MiMo-V2.5','hf/XiaomiMiMo/MiMo-V2.5-Pro','mcode/mimo-auto')
+    # MiMo WEB (aistudio.xiaomimimo.com session) - flagship-first across the live
+    # bridge models, best-first (v2.5-pro, v2.5, v2-flash, ...).
+    'mimo-web' = @('mimo-web/mimo-v2.5-pro','mimo-web/mimo-v2.5','mimo-web/mimo-v2-pro','mimo-web/mimo-v2-flash','mimo-web/mimo-v2-omni')
 }
 $adminToken = $Token
 $extConfig = Join-Path $HOME 'omniroute-cookie-pusher\config.js'
@@ -188,6 +255,14 @@ try {
             # NOT append the family's other models (that would pull in the other
             # speed's thinking levels).
             $modelIds = @($comboFamilies[$name] | Where-Object { $_ -in $catalogIds } | Sort-Object)
+        } elseif ($name -eq 'mimo-web') {
+            # bridge models may not be in the gateway catalog yet, so source the
+            # combo straight from the live bridge probe, flagship-first.
+            $modelIds = @($mimoWeb | Sort-Object)
+            if ($modelIds.Count -gt 0) {
+                $ordered = @($comboFamilies[$name] | Where-Object { $_ -in $mimoWeb })
+                $modelIds = @($ordered + @($mimoWeb | Where-Object { $_ -notin $ordered }) | Select-Object -Unique)
+            }
         } else {
             # flagship-first order, filtered to ids the live catalog actually serves,
             # then append the family's remaining chat routes (so the route covers ALL
@@ -215,7 +290,7 @@ try {
     Write-Host "combo route sync skipped (dashboard API unreachable): $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
-$models = @($auto + $autoMajors + $nvidia + $ocFree + $orFree + $webChat + $mimo + $comboRoutes + $curated | Sort-Object -Unique)
+$models = @($auto + $autoMajors + $nvidia + $ocFree + $orFree + $webChat + $mimo + $mimoWeb + $comboRoutes + $curated | Sort-Object -Unique)
 if ($models.Count -eq 0) {
     Write-Host 'No routes discovered - gateway unreachable or catalog empty?' -ForegroundColor Red
     exit 1
@@ -235,7 +310,7 @@ $cache = [ordered]@{
 }
 $json = $cache | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($cacheFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majors + $($comboRoutes.Count) combo/* routes + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena/deepseek) + $($mimo.Count) mimo + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
+Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majors + $($comboRoutes.Count) combo/* routes + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena/deepseek) + $($mimo.Count) mimo + $($mimoWeb.Count) mimo-web + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
 
 # ---- 4. rebuild availableModels to mirror the picker (auto/* majors kept, dead NIM dropped) ----
 $ccFile = Join-Path $HOME '.claude\settings.json'
@@ -251,6 +326,7 @@ if (Test-Path $ccFile) {
         (($_ -like 'opencode-zen/*' -or $_ -like 'oc/*') -and ($_ -like '*-free' -or $_ -like '*/big-pickle')) -or
         ($_ -like 'openrouter/*' -and $_ -like '*:free') -or
         ($_ -match 'mimo') -or
+        ($_ -like 'mimo-web/*') -or
         ($_ -like 'qwen-web/*' -or $_ -like 'zai-web/*' -or $_ -like 'lmarena/*' -or $_ -like 'no-think/lmarena/*' -or $_ -like 'deepseek-web/*') -or
         $_ -in $curated
     })

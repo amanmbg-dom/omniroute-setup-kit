@@ -6,3 +6,7 @@
 //   omniroute tokens create --name "Cookie Pusher" --scope admin
 export const DEFAULT_URL = 'http://localhost:20128';
 export const DEFAULT_API_KEY = '';
+
+// Local cookie bridges (mimo-web-bridge on 20135) - cookies are pushed here
+// directly instead of into a gateway connection.
+export const BRIDGE_URL = 'http://127.0.0.1:20135';

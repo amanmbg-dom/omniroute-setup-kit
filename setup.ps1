@@ -32,6 +32,9 @@
 .PARAMETER SkipFlowBridge
   Skip installing the flowui bridge (Google Flow via real Chrome session + flowui registration).
 
+.PARAMETER SkipMimoBridge
+  Skip installing the MiMo web bridge (mimo-web/* chat via aistudio.xiaomimimo.com session).
+
 .PARAMETER SkipAutoStart
   Skip registering the login auto-start launcher.
 
@@ -58,6 +61,7 @@ param(
     [switch]$SkipClaudeCode,
     [switch]$SkipBridge,
     [switch]$SkipFlowBridge,
+    [switch]$SkipMimoBridge,
     [switch]$SkipAutoStart,
     [switch]$Pull,
     [switch]$UpdateSkills
@@ -400,6 +404,10 @@ if (-not $SkipExtension) {
 // To rotate: omniroute tokens create --name "Cookie Pusher" --scope admin
 export const DEFAULT_URL = 'http://127.0.0.1:$Port';
 export const DEFAULT_API_KEY = '$token';
+
+// Local cookie bridges (mimo-web-bridge on 20135) - cookies are pushed here
+// directly instead of into a gateway connection.
+export const BRIDGE_URL = 'http://127.0.0.1:20135';
 "@
     [System.IO.File]::WriteAllText(
         (Join-Path $extDst 'config.js'),
@@ -489,8 +497,30 @@ if (-not $SkipFlowBridge) {
     }
 }
 
-# flow bridge state for the auto-start step below
-$flowBridgeOk = (-not $SkipFlowBridge) -and $flowOk
+# ---------- 8d. mimo-web bridge (free MiMo V2.5 chat via aistudio session) ----------
+# No npm deps - plain node (>= 20) + global fetch. The Cookie Pusher's Grab &
+# push sessions sends the aistudio.xiaomimimo.com cookies to the bridge directly
+# (the gateway has no executor for xiaomimimo-web, so no gateway connection).
+if (-not $SkipMimoBridge) {
+    Write-Step 'Installing the MiMo web bridge (mimo-web/* chat via your MiMo AI Studio session)'
+    $mimoDir = Join-Path $KitRoot 'bridge\mimo-web-bridge'
+    $mimoOk = $true
+    if (-not (Test-Path (Join-Path $mimoDir 'bridge.mjs'))) {
+        Write-Warn 'bridge files missing - mimo bridge skipped'
+        $mimoOk = $false
+    }
+    if ($mimoOk) {
+        & node (Join-Path $mimoDir 'register-mimo-web.mjs')
+        if ($LASTEXITCODE -eq 0) { Write-Ok 'mimo-web registered -> models mimo-web/mimo-v2.5, mimo-web/mimo-v2.5-pro, ...' }
+        else { Write-Warn 'mimo-web registration failed - bridge skipped'; $mimoOk = $false }
+    }
+    if ($mimoOk) {
+        Write-Ok 'bridge ready. Start it with: bridge\mimo-web-bridge\start-bridge.cmd'
+        Write-Host "    then sign in at aistudio.xiaomimimo.com and run Cookie Pusher -> Grab & push sessions." -ForegroundColor DarkGray
+        Write-Host '    (fix-model-cache.ps1 also auto-starts the bridge when it is not running.)' -ForegroundColor DarkGray
+    }
+}
+$mimoBridgeOk = (-not $SkipMimoBridge) -and $mimoOk
 
 # ---------- 9. Claude Code ----------
 if (-not $SkipClaudeCode) {
@@ -797,6 +827,10 @@ if (-not $SkipAutoStart) {
             Copy-Item (Join-Path $flowDir 'start-flow-browser.cmd') (Join-Path $startup 'FlowUI-Bridge.cmd') -Force
             Write-Ok 'FlowUI-Bridge.cmd -> Startup folder (flowui image bridge starts at login, headless)'
         }
+        if ($mimoBridgeOk) {
+            Copy-Item (Join-Path $mimoDir 'start-bridge.cmd') (Join-Path $startup 'MiMo-Bridge.cmd') -Force
+            Write-Ok 'MiMo-Bridge.cmd -> Startup folder (mimo-web chat bridge starts at login)'
+        }
     } else {
         Write-Warn 'Startup folder not found - skipping auto-start'
     }
@@ -814,6 +848,10 @@ if (-not $SkipClaudeCode) { Write-Host "  Claude Code: wired (run 'claude' or th
 if ($flowBridgeOk) {
     Write-Host '  Flow images : flowui/nano-banana-2 via bridge\flow-browser\start-flow-browser.cmd (headless, auto-starts)'
     Write-Host '                image requests route through the generate_image MCP tool -> same engine, same quality'
+}
+if ($mimoBridgeOk) {
+    Write-Host '  MiMo web    : mimo-web/mimo-v2.5, mimo-web/mimo-v2.5-pro, combo/mimo-web via bridge\mimo-web-bridge (auto-starts)'
+    Write-Host '                sign in at aistudio.xiaomimimo.com, then Cookie Pusher -> Grab & push sessions once'
 }
 Write-Host ''
 Write-Host '  Last step, once, ~1 minute:' -ForegroundColor Yellow

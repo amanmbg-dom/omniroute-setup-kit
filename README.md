@@ -97,6 +97,10 @@ one manual step:
     session — `flowui/nano-banana-2`), **headless by default**, and registers
     the `flowui` **MCP server** in Claude Code (`generate_image` tool) so every
     image request funnels through the same engine
+8d. Installs the **mimo-web bridge** (free MiMo V2.5 / V2.5-Pro chat via your
+    aistudio.xiaomimimo.com session — `mimo-web/*` + `combo/mimo-web`; the
+    Cookie Pusher sends the session straight to the bridge, since the gateway
+    ships no `xiaomimimo-web` executor)
 9. Installs the **Claude Code CLI** if missing (`npm i -g
    @anthropic-ai/claude-code`), then **wires Claude Code** to the gateway
    (merges the `ANTHROPIC_*` env block into `~/.claude/settings.json`,
@@ -119,8 +123,8 @@ one manual step:
 
 Flags: `-SkipInstall`, `-SkipProviders`, `-SkipExtension`, `-SkipClaudeCode`,
 `-SkipAutoStart`, `-SkipBridge` (gemini-bridge), `-SkipFlowBridge` (flowui),
-`-Pull` (git pull the kit first), `-UpdateSkills` (overwrite existing skills,
-backing up to `<name>.bak-kit`).
+`-SkipMimoBridge` (mimo-web), `-Pull` (git pull the kit first), `-UpdateSkills`
+(overwrite existing skills, backing up to `<name>.bak-kit`).
 
 ## Update everything on an existing machine — one command
 
@@ -209,6 +213,14 @@ OmniRoute API key, or use the model names directly:
   **not** the subscription "Claw" flagship with its ~4h/day usage cap), routed
   across every provider that serves them (opencode-zen/oc free tier, openrouter,
   lmarena, llm7, huggingchat/hf, mcode)
+- `mimo-web/<model>` / `combo/mimo-web` — the **MiMo web version**: your
+  aistudio.xiaomimimo.com session through the local `mimo-web-bridge`
+  (`bridge/mimo-web-bridge`, port 20135). The gateway registers `xiaomimimo-web`
+  but ships no executor for it, so the bridge implements the web chat API
+  (`/open-apis/bot/chat`, cookie auth, `<think>` SSE) behind the gateway's
+  supported `openai-compatible` node mechanism — same pattern as `gflow`/
+  `flowui`. `fix-model-cache.ps1` auto-starts it; sign in at
+  aistudio.xiaomimimo.com, then Cookie Pusher → Grab & push sessions
 
 ## Claude Code
 
@@ -253,7 +265,8 @@ routes as the terminal `/model` picker.
 **Per-family routing routes** — `fix-model-cache.ps1` also creates
 `combo/*` routes for the cookie/web providers (`combo/qwen`, `combo/glm`,
 `combo/deepseek`, `combo/lmarena`, plus `combo/lmarena-fast` and
-`combo/lmarena-slow` for arena by thinking speed) via the dashboard API. Each
+`combo/lmarena-slow` for arena by thinking speed, and `combo/mimo-web` for the
+MiMo web bridge) via the dashboard API. Each
 picks the best live model of its family (flagship first, then every chat-capable
 route of that provider), so `combo/qwen` auto-falls-back across qwen3.8-max →
 qwen3.7-max → qwen3.7-plus, `combo/deepseek` across v4-pro → v4-flash →

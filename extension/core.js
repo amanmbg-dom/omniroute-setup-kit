@@ -1,9 +1,16 @@
 // OmniRoute Cookie Pusher — shared core (ES module).
 // Used by both the popup (manual grab) and the background service worker
 // (scheduled + expiry-driven auto-refresh).
-import { DEFAULT_URL, DEFAULT_API_KEY } from './config.js';
+import { DEFAULT_URL, DEFAULT_API_KEY, BRIDGE_URL } from './config.js';
 
 export const DEFAULTS = { url: DEFAULT_URL, apiKey: DEFAULT_API_KEY };
+
+// Local bridges that take cookies directly (no gateway connection needed):
+// mimo-web-bridge reads ~/.omniroute/mimo-cookies.json.
+export const BRIDGES = {
+  // domain -> { url, path }
+  'aistudio.xiaomimimo.com': { url: BRIDGE_URL || 'http://127.0.0.1:20135', path: '/v1/cookies' },
+};
 
 // Provider catalog — mirrors OmniRoute's WEB_COOKIE_PROVIDERS auth hints.
 // mode:
@@ -42,6 +49,7 @@ export const PROVIDERS = [
   { id: 'kimi-web', label: 'Kimi', mode: 'ls-or-cookie', domain: 'kimi.com',
     lsKey: 'access_token', cookieName: 'kimi-auth', cookieValue: false },
   { id: 'hailuo-web', label: 'Hailuo (MiniMax)', mode: 'ls', domain: 'hailuo.ai', lsKey: '_token' },
+  { id: 'xiaomimimo-web', label: 'Xiaomi MiMo', mode: 'mimo', domain: 'aistudio.xiaomimimo.com', free: true },
   { id: 'doubao-web', label: 'Dola (ByteDance)', mode: 'header', domain: 'dola.com' },
   { id: 'copilot-web', label: 'Microsoft Copilot', mode: 'header', domain: 'copilot.microsoft.com' },
   { id: 'v0-vercel-web', label: 'v0 (Vercel)', mode: 'header', domain: 'v0.dev' },
@@ -170,6 +178,16 @@ export async function grabCredential(cfg) {
       }
       return r.needTab ? { found: false, reason: 'need-tab' } : { found: false, reason: 'no-session' };
     }
+    case 'mimo': {
+      // All cookies for aistudio.xiaomimimo.com (session + xiaomichatbot_ph) are
+      // pushed straight to the local mimo-web-bridge, which writes its own file.
+      if (!cookies.length) return { found: false, reason: 'no-session' };
+      const header = toHeader(cookies, null);
+      const obj = {};
+      for (const c of cookies) obj[c.name] = c.value;
+      if (!obj.session && !obj.SESSION) return { found: false, reason: 'no-session' };
+      return { found: true, apiKey: header, cookies: obj, note: `${cookies.length} cookies` };
+    }
   }
   return { found: false, reason: 'no-session' };
 }
@@ -252,6 +270,19 @@ export async function runAll(settings) {
       const cred = await grabCredential(cfg);
       if (!cred.found) {
         results.push({ id: cfg.id, label: cfg.label, free: cfg.free, status: 'skip', reason: cred.reason });
+        continue;
+      }
+      const bridge = BRIDGES[cfg.domain];
+      if (bridge) {
+        // Cookie bridge: the gateway has no executor for this provider, so the
+        // session goes to the local bridge instead of a gateway connection.
+        const res = await fetch(`${bridge.url}${bridge.path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cookies: cred.cookies }),
+        });
+        if (!res.ok) throw new Error(`bridge ${res.status}: ${(await res.text()).slice(0, 120)}`);
+        results.push({ id: cfg.id, label: cfg.label, free: cfg.free, status: 'ok', note: `${cred.note} -> bridge`, http: res.status });
         continue;
       }
       await pushConnection(cfg, cred, settings);
