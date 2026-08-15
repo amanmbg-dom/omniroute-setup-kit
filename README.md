@@ -104,9 +104,11 @@ one manual step:
 9. Installs the **Claude Code CLI** if missing (`npm i -g
    @anthropic-ai/claude-code`), then **wires Claude Code** to the gateway
    (merges the `ANTHROPIC_*` env block into `~/.claude/settings.json`,
-   preserving existing settings), discovers **all `auto/` routes** from the
-   gateway into the `/model` picker allowlist, and clears the stale
-   gateway-model cache so the picker shows the live catalog
+   preserving existing settings), enables gateway model discovery
+   (`CLAUDE_CODE_USE_GATEWAY` + `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`),
+   patches the installed native binary so the `/model` picker shows the full
+   live catalog (`patch-claude-picker.mjs`), and seeds the fallback
+   gateway-model cache
 9b. **Extra MCPs + skills.sh**: registers Playwright, Context7, Chrome DevTools,
     Memory, Filesystem, Sequential Thinking, Everything, Fetch and GitHub MCP
     servers (idempotent, GitHub only when `gh` is logged in), installs the
@@ -234,7 +236,8 @@ the original is backed up to `settings.json.bak-kit`):
 | `ANTHROPIC_AUTH_TOKEN` | `omniroute` | the gateway's localhost magic token — no secret stored in settings.json |
 | `ANTHROPIC_MODEL` | `auto/coding:reliable` | default model — the reliability-first auto combo: it scores providers by health and auto-falls-back when a model is dead, so NIM outages never interrupt a session (any `nvidia/…`, `opencode-zen/…`, `auto/best-*` also works) |
 | `ANTHROPIC_SMALL_FAST_MODEL` | `auto/best-fast` | background/summarization tasks |
-| `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | *(not set)* | Intentionally OFF: it makes Claude Code refetch the live catalog on every start and filter it to claude-named models, clobbering the curated cache and collapsing `/model` to just Default. The picker list is driven by `availableModels` instead (see `fix-model-cache.ps1`) |
+| `CLAUDE_CODE_USE_GATEWAY` | `true` | registers the auth token as a gateway credential — Claude Code >= 2.1.233 only fetches the gateway catalog for `/model` when this is set |
+| `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `true` | turns on the gateway `/v1/models` bootstrap fetch; `fix-model-cache.ps1` byte-patches the installed native binary (`patch-claude-picker.mjs`) so the picker keeps **every** route instead of filtering to claude-named ids. The patch is re-applied automatically after each Claude Code update |
 | `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT` | `1` | stops window enforcement errors on non-Claude models |
 
 Then just run `claude` in any folder — traffic goes to the free pool. Switch
@@ -255,12 +258,14 @@ the Claude Code input so `/cycle-model` is one keystroke + Enter away
 ANTHROPIC_MODEL=nvidia/nvidia/nemotron-ultra-550b claude
 ```
 
-The `/model` picker shows **every `auto/` route** (reliable, best-coding,
-best-vision, best-fast, best-chat, per-family routes like `auto/glm` /
-`auto/minimax` / `auto/zai`, chaos, offline… — 38 in total) via
-`availableModels`. `fix-model-cache.ps1` mirrors those `auto/*` majors into
-`availableModels`, so the **VS Code** extension's model picker lists the same
-routes as the terminal `/model` picker.
+The `/model` picker shows the **full live gateway catalog** (auto/* majors,
+combo/* routes, mimo-web/*, lmarena/*, qwen-web/zai-web/deepseek-web,
+NVIDIA NIM, OpenCode/OpenRouter free routes — 2600+ entries). This is driven
+by Claude Code's gateway model discovery (`CLAUDE_CODE_USE_GATEWAY` +
+`CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` + the `patch-claude-picker.mjs`
+native-binary patch, applied by `fix-model-cache.ps1` and re-applied
+automatically after every Claude Code auto-update). `availableModels` is still
+mirrored as a fallback allowlist for older builds.
 
 **Per-family routing routes** — `fix-model-cache.ps1` also creates
 `combo/*` routes for the cookie/web providers (`combo/qwen`, `combo/glm`,
@@ -275,9 +280,10 @@ arena model lists (including the `-low/-medium/-high/-xhigh` thinking levels —
 "fast/slow"). `combo/lmarena-fast` restricts to the `-low`/`-medium` arena
 levels and `combo/lmarena-slow` to the `-high`/`-xhigh` ones, so you can route
 by speed explicitly. They're mirrored into `availableModels` too, so the picker
-lists them like any other route. If a picker ever looks empty or partial, the
-model cache is stale — clear `~/.claude/cache/gateway-models.json` (setup.ps1
-does this automatically) and restart Claude Code.
+lists them like any other route. If a picker ever looks empty or partial,
+run `fix-model-cache.ps1` (it re-applies the binary patch, re-ensures the env
+vars, and reseeds the cache — a scheduled task runs it at logon, so Claude
+Code auto-updates self-heal) and reload the VS Code window.
 
 Skip with `-SkipClaudeCode` if you want to leave Claude Code alone.
 

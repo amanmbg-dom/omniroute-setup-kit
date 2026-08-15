@@ -196,9 +196,14 @@ if (Test-Path $cycleSrc) {
         Copy-Item -Recurse -Force $vpsSrc (Join-Path $omHome 'vps')
         Write-Ok 'vps/ -> ~\.omniroute\vps\ (setup-vps.sh + session helpers)'
     }
-    # Ship + run the picker-cache seeder so /model shows all auto/ routes.
+    # Ship + run the picker seeder (env vars + native-binary patch + cache) so
+    # /model shows all gateway routes.
     $seedLive = Join-Path $omHome 'fix-model-cache.ps1'
     Copy-Item (Join-Path $KitRoot 'fix-model-cache.ps1') $seedLive -Force
+    $patchLive = Join-Path $omHome 'patch-claude-picker.mjs'
+    if (Test-Path (Join-Path $KitRoot 'patch-claude-picker.mjs')) {
+        Copy-Item (Join-Path $KitRoot 'patch-claude-picker.mjs') $patchLive -Force
+    }
     & powershell -NoProfile -ExecutionPolicy Bypass -File $seedLive -Base "http://localhost:$Port" 2>&1 | ForEach-Object { Write-Ok $_ }
 
     foreach ($c in @('omni-remote.ps1', 'omni-local.ps1')) {
@@ -551,11 +556,15 @@ if (-not $SkipClaudeCode) {
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_AUTH_TOKEN' -NotePropertyValue 'omniroute' -Force
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_MODEL' -NotePropertyValue 'auto/coding:reliable' -Force
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_SMALL_FAST_MODEL' -NotePropertyValue 'auto/best-fast' -Force
-    # NOTE: do NOT set CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY here. It makes
-    # Claude Code refetch the live gateway catalog on every startup and then
-    # filter it to claude-named models, which overwrites the curated
-    # gateway-models.json cache and collapses the /model picker to just Default.
-    # availableModels (below) is the native mechanism Claude Code honors instead.
+    # Gateway model discovery (Claude Code >= 2.1.233): USE_GATEWAY registers
+    # the auth token as a gateway credential (bootstrap fetches the catalog),
+    # ENABLE_GATEWAY_MODEL_DISCOVERY turns on the /v1/models bootstrap fetch,
+    # and patch-claude-picker.mjs (run by fix-model-cache.ps1 below) removes the
+    # claude/anthropic id filter so the /model picker shows the FULL gateway
+    # catalog (auto/*, combo/*, mimo-web/*, lmarena/*, ...). Without the patch
+    # the picker would only show claude-named routes.
+    $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_USE_GATEWAY' -NotePropertyValue 'true' -Force
+    $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY' -NotePropertyValue 'true' -Force
     $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT' -NotePropertyValue '1' -Force
 
     # The /model picker shows only gateway-discovered models on this allowlist.
@@ -830,6 +839,10 @@ if (-not $SkipAutoStart) {
         if ($mimoBridgeOk) {
             Copy-Item (Join-Path $mimoDir 'start-bridge.cmd') (Join-Path $startup 'MiMo-Bridge.cmd') -Force
             Write-Ok 'MiMo-Bridge.cmd -> Startup folder (mimo-web chat bridge starts at login)'
+        }
+        if (Test-Path (Join-Path $KitRoot 'fix-model-cache.cmd')) {
+            Copy-Item (Join-Path $KitRoot 'fix-model-cache.cmd') (Join-Path $startup 'FixModelCache.cmd') -Force
+            Write-Ok 'FixModelCache.cmd -> Startup folder (/model picker patch re-applied at every login)'
         }
     } else {
         Write-Warn 'Startup folder not found - skipping auto-start'

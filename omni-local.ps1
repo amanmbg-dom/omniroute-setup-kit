@@ -23,6 +23,9 @@ if (Test-Path $bak) {
     $cc = Get-Content $ccFile -Raw | ConvertFrom-Json
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_BASE_URL' -NotePropertyValue 'http://localhost:20128' -Force
     $cc.env | Add-Member -NotePropertyName 'ANTHROPIC_AUTH_TOKEN' -NotePropertyValue 'omniroute' -Force
+    # Gateway model discovery: make the /model picker show the full gateway catalog.
+    $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_USE_GATEWAY' -NotePropertyValue 'true' -Force
+    $cc.env | Add-Member -NotePropertyName 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY' -NotePropertyValue 'true' -Force
     $json = $cc | ConvertTo-Json -Depth 12
     [System.IO.File]::WriteAllText($ccFile, $json, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host 'Reset to local gateway defaults.' -ForegroundColor Green

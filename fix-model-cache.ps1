@@ -3,16 +3,21 @@
   One command that (1) ensures the MiMo web bridge is running + registered,
   (2) creates the per-family combo/* routing routes for the cookie/web
   providers (combo/qwen, combo/glm, combo/deepseek, combo/lmarena, combo/mimo,
-  combo/mimo-web, combo/lmarena-fast/slow) via the dashboard API, (3) seeds Claude Code's gateway-model cache so the
+  combo/mimo-web, combo/lmarena-fast/slow) via the dashboard API, (3) enables Claude Code's gateway model
+  discovery (env vars + native-binary patch) so the /model picker shows the FULL live gateway catalog,
+  (4) seeds Claude Code's gateway-model cache (for older binaries that read it) so the
   /model picker shows the "auto" majors + combo/* routes + ALIVE NVIDIA NIM
   (nvidia/*) + the free OpenCode Zen routes (opencode-zen/*-free, oc/*-free,
-  big-pickle) + the web-cookie chat routes (incl. mimo-web/*), and (4) mirrors all of it into
+  big-pickle) + the web-cookie chat routes (incl. mimo-web/*), and (5) mirrors all of it into
   availableModels - and keeps it that way across re-runs.
 .DESCRIPTION
-  Claude Code caches the gateway catalog in ~/.claude/cache/gateway-models.json,
-  but when it refetches the catalog itself it filters it to claude-named models.
-  This script writes the cache directly with the routes below and pins fetchedAt
-  ~1 year out, so the app treats the cache as fresh and never refetches-and-filters.
+  Claude Code >= 2.1.233 filters the gateway catalog to claude/anthropic-named ids when
+  building the /model picker. This script sets CLAUDE_CODE_USE_GATEWAY +
+  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY and byte-patches the installed native
+  binary's bootstrap filter (patch-claude-picker.mjs, same-length byte replace,
+  idempotent) so every gateway route shows in the picker. It also seeds
+  ~/.claude/cache/gateway-models.json with the routes below and pins fetchedAt
+  ~1 year out for older Claude Code builds that read the cache directly.
 
   Dead NIM models (404 upstream on build.nvidia.com) and non-chat models
   (embed/rerank/asr/tts/image-gen/parse) are excluded, so the picker only shows
@@ -130,6 +135,56 @@ if ($bridgeUp) {
     if ($registerScript) {
         & node $registerScript | Out-Null
         if ($LASTEXITCODE -eq 0) { Write-Host 'mimo-web node + connection registered' -ForegroundColor DarkGray }
+    }
+}
+
+# ---- 1.7. Claude Code picker: env vars + native-binary patch (self-healing) ----
+# Claude Code >= 2.1.233 builds the /model picker from the gateway catalog ONLY
+# through the "gateway model discovery" bootstrap, which (a) requires the env
+# vars below and (b) filters the catalog to claude/anthropic-named ids. We set
+# the env vars and byte-patch the bootstrap filter in the installed native
+# binary so EVERY gateway route (auto/*, combo/*, mimo-web/*, lmarena/*, ...)
+# shows in the picker. The patch is a same-length byte replace, idempotent, and
+# re-applied automatically here after every Claude Code auto-update. This
+# supersedes the old gateway-models.json cache seeding (still kept below for
+# older binaries that read it directly).
+$ccFile = Join-Path $HOME '.claude\settings.json'
+if (Test-Path $ccFile) {
+    $ccEnv = Get-Content $ccFile -Raw | ConvertFrom-Json
+    if (-not $ccEnv.env) { $ccEnv | Add-Member -NotePropertyName env -NotePropertyValue ([pscustomobject]@{}) }
+    $needWrite = $false
+    foreach ($kv in @(@('CLAUDE_CODE_USE_GATEWAY', 'true'), @('CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY', 'true'))) {
+        if (-not ($ccEnv.env.PSObject.Properties.Name -contains $kv[0])) {
+            $ccEnv.env | Add-Member -NotePropertyName $kv[0] -NotePropertyValue $kv[1] -Force
+            $needWrite = $true
+        }
+    }
+    if ($needWrite) {
+        $json = $ccEnv | ConvertTo-Json -Depth 12
+        [System.IO.File]::WriteAllText($ccFile, $json, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host 'settings.json env: CLAUDE_CODE_USE_GATEWAY + CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY added' -ForegroundColor Green
+    }
+}
+$ccExt = Get-ChildItem (Join-Path $HOME '.vscode\extensions') -Directory -Filter 'anthropic.claude-code-*' -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending | Select-Object -First 1
+if ($ccExt) {
+    $nativeExe = Join-Path $ccExt.FullName 'resources\native-binary\claude.exe'
+    if (Test-Path $nativeExe) {
+        $patcher = $null
+        foreach ($cand in @(
+            (Join-Path $PSScriptRoot 'patch-claude-picker.mjs'),
+            (Join-Path $HOME 'omniroute-setup-kit\patch-claude-picker.mjs'),
+            (Join-Path $HOME '.omniroute\patch-claude-picker.mjs')
+        )) { if (Test-Path $cand) { $patcher = $cand; break } }
+        if ($patcher) {
+            & node $patcher $nativeExe 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor Cyan }
+            if ($LASTEXITCODE -eq 0) { Write-Host "Claude Code picker patch ok ($($ccExt.Name))" -ForegroundColor Green }
+            elseif ($LASTEXITCODE -eq 3) {
+                Write-Host 'Claude Code updated - picker patch anchor missing; this build needs re-review' -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host 'patch-claude-picker.mjs not found - picker will only show claude-named routes' -ForegroundColor Yellow
+        }
     }
 }
 
