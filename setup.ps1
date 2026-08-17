@@ -26,6 +26,9 @@
 .PARAMETER SkipClaudeCode
   Skip wiring Claude Code (ANTHROPIC_* env) to the gateway.
 
+.PARAMETER SkipCodex
+  Skip installing/wiring the OpenAI Codex CLI (~/.codex/config.toml) to the gateway.
+
 .PARAMETER SkipBridge
   Skip installing the Google Flow image bridge (gemini_webapi venv + gflow registration).
 
@@ -59,6 +62,7 @@ param(
     [switch]$SkipProviders,
     [switch]$SkipExtension,
     [switch]$SkipClaudeCode,
+    [switch]$SkipCodex,
     [switch]$SkipBridge,
     [switch]$SkipFlowBridge,
     [switch]$SkipMimoBridge,
@@ -606,19 +610,6 @@ if (-not $SkipClaudeCode) {
     $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue $autoRoutes -Force
     Write-Ok "availableModels -> $($autoRoutes.Count) routes (auto/* majors + combo/* + nvidia-alive + opencode-free + openrouter:free) in the /model picker"
 
-    # Claude Code caches the gateway model catalog in ~/.claude/cache, and when
-    # it REFETCHES the catalog itself it filters it to claude-named models
-    # (322 models / 2 auto routes) - which is why the picker kept showing only
-    # auto/claude-opus + auto/claude-sonnet. Do NOT delete the cache (that
-    # forces the filtered refetch). Instead seed it with the auto/ routes and a
-    # far-future fetchedAt so the app treats it as fresh and never refetches.
-    $seedScript = Join-Path $KitRoot 'fix-model-cache.ps1'
-    if (Test-Path $seedScript) {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $seedScript -Base "http://localhost:$Port" | ForEach-Object { Write-Ok $_ }
-    } else {
-        Write-Warn 'fix-model-cache.ps1 missing - /model picker may only show claude-named auto routes'
-    }
-
     $prev = Get-Content $ccFile -Raw -ErrorAction SilentlyContinue
     $json = $cc | ConvertTo-Json -Depth 12
     if ($prev -and $prev.Trim() -ne $json.Trim()) {
@@ -627,6 +618,22 @@ if (-not $SkipClaudeCode) {
     [System.IO.File]::WriteAllText($ccFile, $json, (New-Object System.Text.UTF8Encoding($false)))
     Write-Ok '~/.claude/settings.json -> ANTHROPIC_BASE_URL/AUTH_TOKEN/MODEL wired to the gateway'
     Write-Ok '   (existing permissions/hooks preserved; original backed up to settings.json.bak-kit)'
+
+    # Claude Code caches the gateway model catalog in ~/.claude/cache, and when
+    # it REFETCHES the catalog itself it filters it to claude-named models
+    # (322 models / 2 auto routes) - which is why the picker kept showing only
+    # auto/claude-opus + auto/claude-sonnet. Do NOT delete the cache (that
+    # forces the filtered refetch). Instead seed it with the auto/ routes and a
+    # far-future fetchedAt so the app treats it as fresh and never refetches.
+    # Run AFTER the settings.json write above so the availableModels rebuild
+    # (auto/* majors + combo/* + web-chat routes + NIM + free tiers) is not
+    # clobbered by the base allowlist written just now.
+    $seedScript = Join-Path $KitRoot 'fix-model-cache.ps1'
+    if (Test-Path $seedScript) {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $seedScript -Base "http://localhost:$Port" | ForEach-Object { Write-Ok $_ }
+    } else {
+        Write-Warn 'fix-model-cache.ps1 missing - /model picker may only show claude-named auto routes'
+    }
 
     # Ship the kit's skills (single-page-site, ...) to ~/.claude/skills.
     # By default only copies folders that are not already installed, so local
@@ -825,24 +832,182 @@ if (-not $SkipClaudeCode) {
     }
 }
 
-# ---------- 10. auto-start ----------
+# ---------- 9d. Codex CLI (OpenAI's agent CLI, wired through the gateway) ----------
+# Current Codex (>= ~0.134) accepts ONLY the Responses API for custom providers
+# (wire_api = "responses" is the only supported value), so this relies on the
+# gateway's native /v1/responses endpoint - no adapter needed. The gateway's
+# localhost magic token 'omniroute' is not a real secret, so it is stored
+# inline (same philosophy as ANTHROPIC_AUTH_TOKEN for Claude Code).
+if (-not $SkipCodex) {
+    if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+        Write-Step 'Installing the Codex CLI (npm i -g @openai/codex)'
+        & npm install -g @openai/codex 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Ok "codex $(codex --version 2>$null)" }
+        else { Write-Warn 'codex install failed - re-run setup.ps1 after fixing npm' }
+    }
+
+    Write-Step 'Wiring the Codex CLI to the gateway (Responses API)'
+    $codexDir = Join-Path $HOME '.codex'
+    New-Item -ItemType Directory -Force -Path $codexDir | Out-Null
+    $codexCfg = Join-Path $codexDir 'config.toml'
+    $codexToml = @"
+# Codex CLI -> OmniRoute free gateway (localhost) - written by setup.ps1 (kit).
+model = "auto/coding:reliable"
+model_provider = "omniroute"
+
+[model_providers.omniroute]
+name = "OmniRoute free pool (localhost:$Port)"
+base_url = "http://localhost:$Port/v1"
+# The gateway's localhost magic token - not a real secret (localhost-only),
+# same value the kit uses for Claude Code's ANTHROPIC_AUTH_TOKEN.
+experimental_bearer_token = "omniroute"
+"@
+    $prevCodex = Get-Content $codexCfg -Raw -ErrorAction SilentlyContinue
+    if ($prevCodex -and $prevCodex -notmatch 'model_providers\.omniroute') {
+        Copy-Item $codexCfg "$codexCfg.bak-kit" -Force
+        Write-Ok "existing $codexCfg backed up to config.toml.bak-kit (omniroute provider block was missing)"
+    }
+    [System.IO.File]::WriteAllText($codexCfg, $codexToml, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Ok '~/.codex/config.toml -> model_provider omniroute (Responses API - the only wire protocol current Codex accepts)'
+    Write-Host '    switch models any time with: codex -m <model>   (e.g. codex -m auto/best-fast, codex -m combo/qwen)' -ForegroundColor DarkGray
+
+    # Model profiles: `codex --profile <name>` overlays ~/.codex/<name>.config.toml
+    # on top of the base config, so one flag switches the gateway route.
+    $codexProfiles = @{
+        fast      = 'auto/best-fast'
+        coding    = 'auto/best-coding'
+        reasoning = 'auto/best-reasoning'
+        vision    = 'auto/best-vision'
+    }
+    foreach ($p in ($codexProfiles.Keys | Sort-Object)) {
+        $pf = Join-Path $codexDir "$p.config.toml"
+        $pt = "# Codex profile '$p' - written by setup.ps1 (kit).`nmodel = `"$($codexProfiles[$p])`"`n"
+        [System.IO.File]::WriteAllText($pf, $pt, (New-Object System.Text.UTF8Encoding($false)))
+    }
+    Write-Ok "Codex profiles: $((($codexProfiles.Keys | Sort-Object) -join ', ')) - use 'codex --profile <name>'"
+
+    # Codex's /model picker only lists OpenAI's built-in models by default.
+    # fix-model-cache.ps1 generates a model_catalog_json from the live gateway
+    # catalog (auto/*, combo/*, lmarena/*, mimo-web/*, ...) and reconciles
+    # config.toml (adds the root-level model_catalog_json + keeps the default
+    # model on the gateway), so the picker shows every gateway route. Run it
+    # AFTER writing the base config above so the catalog line survives.
+    $codexCacheScript = Join-Path $KitRoot 'fix-model-cache.ps1'
+    if (Test-Path $codexCacheScript) {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $codexCacheScript -Base $Base -CombosOnly | ForEach-Object { Write-Ok $_ }
+        Write-Ok "Codex /model picker -> gateway routes via model_catalog_json (~/.codex/model-catalogs/omniroute.json)"
+    } else {
+        Write-Warn 'fix-model-cache.ps1 missing - Codex picker will only show OpenAI built-ins'
+    }
+}
+
+# ---------- 10. auto-start (fully hidden - no console windows at login) ----------
 if (-not $SkipAutoStart) {
-    Write-Step 'Registering auto-start at login'
+    Write-Step 'Registering auto-start at login (hidden - no console windows)'
     $startup = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'
     if (Test-Path $startup) {
-        Copy-Item $launcherSrc (Join-Path $startup 'OmniRoute.cmd') -Force
-        Write-Ok 'OmniRoute.cmd -> Startup folder (gateway starts at login)'
-        if ($flowBridgeOk) {
-            Copy-Item (Join-Path $flowDir 'start-flow-browser.cmd') (Join-Path $startup 'FlowUI-Bridge.cmd') -Force
-            Write-Ok 'FlowUI-Bridge.cmd -> Startup folder (flowui image bridge starts at login, headless)'
+        # Every service starts through a tiny .vbs launcher that runs its .cmd
+        # with window style 0 (hidden): no console window, no flash at login.
+        # The .cmd files stay the source of truth in the kit (visible when run
+        # manually), the Startup copy is just the invisible wrapper. Targets use
+        # %USERPROFILE% at runtime so the same files work on any machine.
+        # IMPORTANT: ExpandEnvironmentStrings only expands %VAR% tokens - a bare
+        # name (e.g. "USERPROFILE") is returned unchanged, which made every
+        # Startup .vbs build a bogus relative path (USERPROFILE\.omniroute\...) and
+        # pop a "file not found" dialog at every login. Use %USERPROFILE% here.
+        # Also: if the target is ever missing, log to ~\.omniroute\vbs-errors.log
+        # instead of showing a dialog (On Error Resume Next + existence check),
+        # so the logon can never be interrupted by an error box again.
+        $vbsTpl = @'
+On Error Resume Next
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set sh = CreateObject("WScript.Shell")
+target = sh.ExpandEnvironmentStrings("%USERPROFILE%") & "<TARGET>"
+If fso.FileExists(target) Then
+  sh.Run """" & target & """", 0, False
+Else
+  Set log = fso.OpenTextFile(sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\.omniroute\vbs-errors.log", 8, True)
+  log.WriteLine Now & " MISSING: " & target
+  log.Close
+End If
+'@
+        function Write-HiddenStartup([string]$name, [string]$target) {
+            $content = $vbsTpl.Replace('<TARGET>', $target)
+            [System.IO.File]::WriteAllText(
+                (Join-Path $startup "$name.vbs"),
+                $content,
+                (New-Object System.Text.UTF8Encoding($false))
+            )
+        }
+
+        # Remove the old visible .cmd Startup entries this script used to create
+        # (they opened + held console windows at every login).
+        foreach ($old in @('OmniRoute.cmd','FlowUI-Bridge.cmd','Gemini-Bridge.cmd','MiMo-Bridge.cmd','FixModelCache.cmd')) {
+            $oldPath = Join-Path $startup $old
+            if (Test-Path $oldPath) { Remove-Item $oldPath -Force }
+        }
+
+        Write-HiddenStartup 'OmniRoute' '\.omniroute\start-omniroute.cmd'
+        Write-Ok 'OmniRoute.vbs -> Startup folder (gateway starts at login, hidden)'
+        if ($flowOk) {
+            Write-HiddenStartup 'FlowUI-Bridge' '\omniroute-setup-kit\bridge\flow-browser\start-flow-browser.cmd'
+            Write-Ok 'FlowUI-Bridge.vbs -> Startup folder (flowui image bridge starts at login, hidden + headless)'
         }
         if ($mimoBridgeOk) {
-            Copy-Item (Join-Path $mimoDir 'start-bridge.cmd') (Join-Path $startup 'MiMo-Bridge.cmd') -Force
-            Write-Ok 'MiMo-Bridge.cmd -> Startup folder (mimo-web chat bridge starts at login)'
+            Write-HiddenStartup 'MiMo-Bridge' '\.omniroute\bridge\mimo-web-bridge\start-bridge.cmd'
+            Write-Ok 'MiMo-Bridge.vbs -> Startup folder (mimo-web chat bridge starts at login, hidden)'
+        }
+        if ($bridgeOk) {
+            Write-HiddenStartup 'Gemini-Bridge' '\omniroute-setup-kit\bridge\gemini-bridge\start-bridge.cmd'
+            Write-Ok 'Gemini-Bridge.vbs -> Startup folder (gflow image bridge starts at login, hidden)'
         }
         if (Test-Path (Join-Path $KitRoot 'fix-model-cache.cmd')) {
-            Copy-Item (Join-Path $KitRoot 'fix-model-cache.cmd') (Join-Path $startup 'FixModelCache.cmd') -Force
-            Write-Ok 'FixModelCache.cmd -> Startup folder (/model picker patch re-applied at every login)'
+            Write-HiddenStartup 'FixModelCache' '\omniroute-setup-kit\fix-model-cache.cmd'
+            # The logon cmd resolves fix-model-cache.ps1 from ~\.omniroute (it
+            # cannot ship the ps1 next to the Startup copy), so keep the script +
+            # its patch helpers fresh there - the logon self-heal silently did
+            # nothing before this (no ps1 next to the Startup .cmd).
+            foreach ($f in @('fix-model-cache.ps1', 'patch-claude-picker.mjs', 'patch-zai-captcha-headed.mjs', 'guard-startup-vbs.ps1')) {
+                $src = Join-Path $KitRoot $f
+                if (Test-Path $src) { Copy-Item $src (Join-Path $omHome $f) -Force }
+            }
+            Write-Ok 'FixModelCache.vbs -> Startup folder (/model picker patch + zai headless patch re-applied at every login, hidden)'
+        }
+
+        # Gateway + bridge watchdog: probes every 5 min, restarts a wedged
+        # gateway (listening but not answering HTTP), re-syncs combo/* routes
+        # after a restart, and restarts any down bridge - all hidden. Runs from
+        # the stable ~/.omniroute copy, not this worktree. The logon run is a
+        # Startup .vbs (below) - Register-ScheduledTask and schtasks /XML are
+        # blocked (Access denied) on some machines, while plain schtasks /SC
+        # MINUTE and Startup .vbs both work, so we use those.
+        $wdSrc = Join-Path $KitRoot 'launcher\watchdog.ps1'
+        $wdDst = Join-Path $omHome 'watchdog.ps1'
+        if (Test-Path $wdSrc) {
+            Copy-Item $wdSrc $wdDst -Force
+            $wdTask = "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$wdDst`""
+            schtasks /Create /TN 'OmniRoute-Watchdog' /TR $wdTask /SC MINUTE /MO 5 /F | Out-Null
+            Write-Ok 'OmniRoute-Watchdog scheduled task -> gateway + bridges probed every 5 min, all restarts hidden'
+
+            # Logon run: hidden .vbs that waits 90s (let the Startup services
+            # cold-start first) then runs the watchdog once.
+            # Same %USERPROFILE% fix as the template above - the bare name was
+            # returned unexpanded, so the logon watchdog run silently pointed at
+            # a relative path and never executed.
+            $wdVbs = @"
+' Watchdog.vbs - run the OmniRoute watchdog 90s after logon, fully hidden.
+WScript.Sleep 90000
+Set sh = CreateObject("WScript.Shell")
+sh.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\.omniroute\watchdog.ps1""", 0, False
+"@
+            [System.IO.File]::WriteAllText(
+                (Join-Path $startup 'Watchdog.vbs'),
+                $wdVbs,
+                (New-Object System.Text.UTF8Encoding($false))
+            )
+            Write-Ok 'Watchdog.vbs -> Startup folder (watchdog also runs once 90s after logon, hidden)'
+        } else {
+            Write-Warn 'launcher\watchdog.ps1 missing - no gateway watchdog scheduled task'
         }
     } else {
         Write-Warn 'Startup folder not found - skipping auto-start'
@@ -857,10 +1022,15 @@ Write-Host '=================================================' -ForegroundColor 
 Write-Host "  Gateway   : $Base          (auto-starts at login)"
 Write-Host "  Dashboard : $Base/admin    (password from config/local.env - change it!)"
 Write-Host "  Extension : $HOME\omniroute-cookie-pusher"
-if (-not $SkipClaudeCode) { Write-Host "  Claude Code: wired (run 'claude' or the Claude Desktop Code tab - $($autoRoutes.Count) routes in /model)" }
-if ($flowBridgeOk) {
+if (-not $SkipClaudeCode) { Write-Host "  Claude Code: wired (run 'claude' or the Claude Desktop Code tab - /model shows the gateway routes)" }
+if (-not $SkipCodex) { Write-Host "  Codex CLI   : wired (run 'codex' - auto/coding:reliable via the gateway, /model shows the gateway routes)" }
+Write-Host '  Watchdog    : OmniRoute-Watchdog scheduled task - wedged gateway auto-restarted + combo/* re-synced every 5 min'
+if ($flowOk) {
     Write-Host '  Flow images : flowui/nano-banana-2 via bridge\flow-browser\start-flow-browser.cmd (headless, auto-starts)'
     Write-Host '                image requests route through the generate_image MCP tool -> same engine, same quality'
+}
+if ($bridgeOk) {
+    Write-Host '  gflow images: gflow/nano-banana-2 via bridge\gemini-bridge\start-bridge.cmd (token method, auto-starts)'
 }
 if ($mimoBridgeOk) {
     Write-Host '  MiMo web    : mimo-web/mimo-v2.5, mimo-web/mimo-v2.5-pro, combo/mimo-web via bridge\mimo-web-bridge (auto-starts)'
