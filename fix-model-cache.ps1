@@ -154,6 +154,56 @@ if ($bridgeUp) {
     }
 }
 
+# ---- 1.5.5. ensure the DeepSeek web bridge is running + registered ----
+# deepseek-web is a local OpenAI-compatible bridge (bridge/deepseek-web-bridge/
+# bridge.mjs) that answers deepseek-web/* with AUTO-CONTINUE: DeepSeek's web API
+# ends long responses with status INCOMPLETE (the "Continue generating" button)
+# and the gateway's built-in executor truncates there. The bridge continues the
+# stream automatically (up to 8 rounds) so long chats complete. Token (userToken)
+# is pushed by Cookie Pusher -> Grab & push sessions.
+$dsBridgePort = 20136
+$dsBridgeUp = $false
+try {
+    $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$dsBridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
+    $dsBridgeUp = ($probe.StatusCode -eq 200)
+} catch { $dsBridgeUp = $false }
+if (-not $dsBridgeUp) {
+    $dsBridgeScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'bridge\deepseek-web-bridge\bridge.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\bridge\deepseek-web-bridge\bridge.mjs'),
+        (Join-Path $HOME '.omniroute\bridge\deepseek-web-bridge\bridge.mjs')
+    )) { if (Test-Path $cand) { $dsBridgeScript = $cand; break } }
+    if ($dsBridgeScript) {
+        $dsBridgeLog = Join-Path $HOME '.omniroute\deepseek-web-bridge.log'
+        Start-Process -FilePath 'node' -ArgumentList @($dsBridgeScript) -WindowStyle Hidden `
+            -RedirectStandardOutput $dsBridgeLog -RedirectStandardError $dsBridgeLog
+        Start-Sleep -Seconds 2
+        try {
+            $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$dsBridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
+            $dsBridgeUp = ($probe.StatusCode -eq 200)
+        } catch { $dsBridgeUp = $false }
+        if ($dsBridgeUp) { Write-Host "DeepSeek web bridge started ($dsBridgeScript, auto-continue)" -ForegroundColor Green }
+        else { Write-Host 'DeepSeek web bridge NOT running (node missing?) - deepseek-web routes will not appear' -ForegroundColor Yellow }
+    } else {
+        Write-Host 'DeepSeek web bridge script not found - deepseek-web routes skipped' -ForegroundColor Yellow
+    }
+} else {
+    Write-Host 'DeepSeek web bridge already running' -ForegroundColor DarkGray
+}
+if ($dsBridgeUp) {
+    $dsRegisterScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'bridge\deepseek-web-bridge\register-deepseek-web.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\bridge\deepseek-web-bridge\register-deepseek-web.mjs'),
+        (Join-Path $HOME '.omniroute\bridge\deepseek-web-bridge\register-deepseek-web.mjs')
+    )) { if (Test-Path $cand) { $dsRegisterScript = $cand; break } }
+    if ($dsRegisterScript) {
+        & node $dsRegisterScript | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Host 'deepseek-web node + connection registered' -ForegroundColor DarkGray }
+    }
+}
+
 # ---- 1.6.5. fast mode ----
 # -CombosOnly: skip the Claude Code picker patch, cache seed and availableModels
 # rebuild (used by the gateway watchdog after a restart - it only needs the
@@ -448,6 +498,38 @@ if (Test-Path $ccFile) {
 }
 
 } # end -CombosOnly skip (availableModels)
+
+# ---- 4.25. GATEWAY CURATION: hide every non-curated route so /v1/models (and
+#      therefore the Claude/Codex discovery pickers, which read it LIVE) show
+#      EXACTLY the curated free-model catalog - no gazillions, and no model is
+#      ever "restricted by your organization's settings" (every curated route
+#      is in the entitlement list). Writes modelCompatOverrides rows into
+#      ~/.omniroute/storage.sqlite (same contract as the dashboard hide eye).
+#      Idempotent; SKIP_CURATE=1 disables.
+if (-not $CombosOnly -and $env:SKIP_CURATE -ne '1') {
+    $curateScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'curate-gateway.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\curate-gateway.mjs'),
+        (Join-Path $HOME '.omniroute\curate-gateway.mjs')
+    )) { if (Test-Path $cand) { $curateScript = $cand; break } }
+    if ($curateScript) {
+        $dbPath = Join-Path $HOME '.omniroute\storage.sqlite'
+        if (Test-Path $dbPath) {
+            $tmpList = Join-Path $env:TEMP "omniroute-curated-$([guid]::NewGuid().ToString('N')).txt"
+            $models | Set-Content -Path $tmpList -Encoding UTF8
+            try {
+                & node $curateScript $dbPath $Base $adminToken $tmpList 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor DarkGray }
+            } finally {
+                Remove-Item $tmpList -Force -ErrorAction SilentlyContinue
+            }
+        } else {
+            Write-Host 'Gateway DB not found - curation skipped (start the gateway once first)' -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host 'curate-gateway.mjs not found - skipping gateway curation' -ForegroundColor Yellow
+    }
+}
 
 # ---- 4.5. Codex CLI model catalog (model_catalog_json) ----
 # Codex's /model picker only shows OpenAI's built-in models by default. Point it

@@ -7,6 +7,10 @@
   "host_permissions": [
     "http://localhost:20128/*",
     "http://127.0.0.1:20128/*",
+    "http://localhost:20135/*",
+    "http://127.0.0.1:20135/*",
+    "http://localhost:20136/*",
+    "http://127.0.0.1:20136/*",
     "https://huggingface.co/*",
     "https://chat.qwen.ai/*",
     "https://gemini.google.com/*",
@@ -14,6 +18,7 @@
     "https://chat.z.ai/*",
     "https://yuanbao.tencent.com/*",
     "https://chat.deepseek.com/*",
+    "https://aistudio.xiaomimimo.com/*",
     "https://www.kimi.com/*",
     "https://zenmux.ai/*",
     "https://arena.ai/*",

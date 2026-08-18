@@ -21,3 +21,7 @@ config/local.env
 omniroute-transfer.tar.gz
 *.tar.gz
 .venv/
+
+# Environment files (never commit secrets)
+*.env
+.env.*

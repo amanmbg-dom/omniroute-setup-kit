@@ -174,7 +174,7 @@ fi
 
 echo
 echo "Port status:"
-for p in "$PORT" 20133 20134 20135; do
+for p in "$PORT" 20133 20134 20135 20136; do
   port_up "$p" && echo "  $p : UP" || echo "  $p : down"
 done
 echo

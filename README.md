@@ -34,6 +34,46 @@ machine: `git clone <url>` → run `setup.ps1`. (If you'd rather host it
 somewhere else — GitLab, Gitea, a USB stick — the kit is just a folder; copy
 it and run `setup.ps1` from there.)
 
+### Cloning on another machine (your own keys)
+
+`config/local.env` is **gitignored** — it never leaves your machine. To set up
+another machine with your own keys:
+
+```powershell
+# 1. Clone the repo
+gh repo clone amanmbg-dom/omniroute-setup-kit omniroute-kit
+# or: git clone <your-fork-url> omniroute-kit
+
+# 2. Copy your local.env (from the other machine, or recreate it)
+#    Option A: copy the file manually (USB, secure transfer, etc.)
+#    Option B: recreate it — the example template is in the repo:
+copy configlocal.env.example configlocal.env
+#    Then fill in your API keys in configlocal.env
+
+# 3. Run setup
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+**Quick transfer between your own machines:** if both machines have the kit,
+you can copy `configlocal.env` directly (USB drive, secure cloud paste,
+`scp`, etc.) — the file is small and plain text.
+
+### Forking for others (private repo, no keys)
+
+If you want someone else to use the kit with your private repo:
+
+1. **Create a fork** of the private repo on GitHub (Settings → Forks → Allow
+   forking to private repos, or just share the repo directly)
+2. They clone it — `config/local.env` is gitignored, so **no keys leak**
+3. They copy `config/local.env.example` to `config/local.env` and fill in
+   their own API keys
+4. Run `setup.ps1`
+
+The `.example` file shows every key with its registration URL and what it
+does. Keys left blank are simply skipped — the free providers still work
+without any keys at all (the `auto` fallback pool: felo, opencode built-in,
+agy, blackbox, duckduckgo-web, friendliai).
+
 ## One command — any new Windows device (even a BRAND-NEW, empty PC)
 
 The kit ships `bootstrap.ps1`, which assumes **nothing but PowerShell and
@@ -533,9 +573,12 @@ a DNS route with your own domain for a permanent URL.
 
 ## Security notes
 
-- `config/local.env` contains **live API keys**. Keep this repo **private**;
-  if you ever plan to share/publish it, empty the keys and distribute them
-  out-of-band (the script just skips empty ones).
+- `config/local.env` contains **live API keys**. It is **gitignored** and
+  never committed to the repo. Keep the repo private; if you ever plan to
+  make it public, empty the keys first (the script just skips empty ones).
+- `config/local.env.example` is a **safe template** — no real keys, just
+  placeholders and registration URLs. It IS committed so others know what
+  to fill in.
 - The dashboard password defaults to `CHANGEME` — change it in Settings on
   first login. The gateway listens on all interfaces and stores your keys.
 - The extension's token grants local OmniRoute admin — it never leaves the

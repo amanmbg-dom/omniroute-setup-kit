@@ -38,6 +38,9 @@
 .PARAMETER SkipMimoBridge
   Skip installing the MiMo web bridge (mimo-web/* chat via aistudio.xiaomimimo.com session).
 
+.PARAMETER SkipDeepseekBridge
+  Skip installing the DeepSeek web bridge (deepseek-web/* chat via chat.deepseek.com session, with auto-continue).
+
 .PARAMETER SkipAutoStart
   Skip registering the login auto-start launcher.
 
@@ -66,6 +69,7 @@ param(
     [switch]$SkipBridge,
     [switch]$SkipFlowBridge,
     [switch]$SkipMimoBridge,
+    [switch]$SkipDeepseekBridge,
     [switch]$SkipAutoStart,
     [switch]$Pull,
     [switch]$UpdateSkills
@@ -107,6 +111,27 @@ if ($Pull) {
 }
 
 # ---------- 1. config ----------
+# Safety check: ensure local.env is not accidentally tracked by git
+$gitDir1 = Join-Path $KitRoot '.git'
+if (Test-Path $gitDir1) {
+    $tracked = git -C $KitRoot ls-files config/local.env 2>$null
+    if ($tracked) {
+        Write-Host ''
+        Write-Host '=================================================' -ForegroundColor Red
+        Write-Host '  SECURITY WARNING: config/local.env is tracked!' -ForegroundColor Red
+        Write-Host '=================================================' -ForegroundColor Red
+        Write-Host '  config/local.env contains live API keys and should never be committed.'
+        Write-Host '  Run this to untrack it (your file stays on disk, only git stops tracking):'
+        Write-Host ''
+        Write-Host '    git rm --cached config/local.env' -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host '  Then commit the removal. Your keys are safe - the .gitignore already'
+        Write-Host '  prevents re-adding it. Continuing setup in 5 seconds...'
+        Write-Host ''
+        Start-Sleep -Seconds 5
+    }
+}
+
 $envPath = Join-Path $KitRoot 'config\local.env'
 if (-not (Test-Path $envPath)) {
     Write-Host "config/local.env not found next to setup.ps1. Aborting." -ForegroundColor Red
@@ -530,6 +555,35 @@ if (-not $SkipMimoBridge) {
     }
 }
 $mimoBridgeOk = (-not $SkipMimoBridge) -and $mimoOk
+
+# ---------- 8e. deepseek-web bridge (free DeepSeek web chat via chat.deepseek.com session) ----------
+# No npm deps - plain node (>= 20) + global fetch. The Cookie Pusher's Grab &
+# push sessions sends the chat.deepseek.com localStorage userToken to the bridge
+# directly. The bridge REPLACES the gateway's built-in deepseek-web executor and
+# adds AUTO-CONTINUE: DeepSeek's web API ends long responses with INCOMPLETE
+# (the "Continue generating" button) and the built-in executor truncates there;
+# the bridge calls POST /api/v0/chat/continue automatically (up to 8 rounds) so
+# long chats stream to completion.
+if (-not $SkipDeepseekBridge) {
+    Write-Step 'Installing the DeepSeek web bridge (deepseek-web/* with auto-continue)'
+    $dsDir = Join-Path $KitRoot 'bridge\deepseek-web-bridge'
+    $dsOk = $true
+    if (-not (Test-Path (Join-Path $dsDir 'bridge.mjs'))) {
+        Write-Warn 'bridge files missing - deepseek bridge skipped'
+        $dsOk = $false
+    }
+    if ($dsOk) {
+        & node (Join-Path $dsDir 'register-deepseek-web.mjs')
+        if ($LASTEXITCODE -eq 0) { Write-Ok 'deepseek-web registered -> models deepseek-web/deepseek-chat, deepseek-web/DeepSeek-V3.2, ... (auto-continue)' }
+        else { Write-Warn 'deepseek-web registration failed - bridge skipped'; $dsOk = $false }
+    }
+    if ($dsOk) {
+        Write-Ok 'bridge ready. Start it with: bridge\deepseek-web-bridge\start-bridge.cmd'
+        Write-Host "    then sign in at chat.deepseek.com and run Cookie Pusher -> Grab & push sessions." -ForegroundColor DarkGray
+        Write-Host '    (fix-model-cache.ps1 also auto-starts the bridge when it is not running.)' -ForegroundColor DarkGray
+    }
+}
+$deepseekBridgeOk = (-not $SkipDeepseekBridge) -and $dsOk
 
 # ---------- 9. Claude Code ----------
 if (-not $SkipClaudeCode) {
@@ -1012,6 +1066,26 @@ sh.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -F
     } else {
         Write-Warn 'Startup folder not found - skipping auto-start'
     }
+}
+
+
+# ---------- 10b. git pre-commit hook (blocks secrets from being committed) ----------
+$gitDir = Join-Path $KitRoot '.git'
+$hookSrc = Join-Path $KitRoot 'hooks\pre-commit'
+$hookDst = Join-Path $gitDir 'hooks\pre-commit'
+if (Test-Path $gitDir) {
+    if (Test-Path $hookSrc) {
+        $hooksDir = Join-Path $gitDir 'hooks'
+        if (-not (Test-Path $hooksDir)) { New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null }
+        Copy-Item $hookSrc $hookDst -Force
+        # Make executable on Unix-like systems (Git Bash / WSL)
+        if ($IsLinux -or $IsMacOS) { chmod +x $hookDst 2>$null }
+        Write-Ok 'pre-commit hook installed -> blocks .env files and API key patterns'
+    } else {
+        Write-Warn 'hooks\pre-commit not found - skipping hook installation'
+    }
+} else {
+    Write-Warn 'No .git folder in kit root - skipping pre-commit hook installation'
 }
 
 # ---------- 11. summary ----------
