@@ -1,1 +1,8 @@
-gemini_webapi>=1.2.0
+# gemini_webapi 2.1.0 is the version that installs on Termux/Android with
+# Termux's Python 3.14: it uses pydantic 2.12 (whose pydantic-core supports
+# 3.14 - older pydantic-core 2.33's jiter uses FFI removed in 3.14 and cannot
+# build) and curl-cffi (ships a native android wheel). orjson builds from
+# source with rust - set ANDROID_API_LEVEL=$(getprop ro.build.version.sdk)
+# before pip install. API is identical to what the bridge uses
+# (GeminiClient(secure_1psid, secure_1psidts, proxy) + generate_content).
+gemini_webapi==2.1.0

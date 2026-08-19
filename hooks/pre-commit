@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# pre-commit hook — blocks .env files and warns about API key patterns
+# Install: copy to .git/hooks/pre-commit (setup.ps1 does this automatically)
+
+set -euo pipefail
+
+# Patterns that look like real API keys (first 8 chars after = or :)
+KEY_PATTERNS=(
+  'nvapi-[A-Za-z0-9]{10,}'      # NVIDIA NIM
+  'sk-[A-Za-z0-9]{20,}'          # OpenAI-style / OpenCode Zen / DeepSeek
+  'gsk_[A-Za-z0-9]{20,}'         # Groq
+  'sk-or-v1-[A-Za-z0-9]{20,}'   # OpenRouter
+  'github_pat_[A-Za-z0-9_]{20,}' # GitHub PATs
+  'hf_[A-Za-z0-9]{10,}'          # Hugging Face
+  'xai-[A-Za-z0-9]{10,}'         # xAI / Grok
+  'cpk_[A-Za-z0-9_.]{20,}'       # Chutes.ai
+  'llm7-[A-Za-z0-9/+=]{10,}'    # LLM7.io
+  'alv2_[A-Za-z0-9]{10,}'        # Aion Labs
+  'aq_[A-Za-z0-9]{10,}'          # Agnes AI
+)
+
+blocked=0
+
+# 1. Block any .env file from being committed
+for file in $(git diff --cached --name-only --diff-filter=ACM 2>/dev/null); do
+  case "$file" in
+    *.env|*.env.*|*/.env|*/.env.*)
+      echo "BLOCKED: $file looks like an environment/secrets file."
+      echo "  Add it to .gitignore and unstage it: git reset HEAD $file"
+      blocked=1
+      ;;
+  esac
+done
+
+if [ "$blocked" -eq 1 ]; then
+  echo ""
+  echo "Commit aborted. Secrets must not be committed."
+  exit 1
+fi
+
+# 2. Scan staged additions for patterns that look like API keys
+for file in $(git diff --cached --name-only --diff-filter=ACM 2>/dev/null); do
+  # Skip binary files and known safe files
+  case "$file" in
+    *.env.example|*.md|*.json|*.lock|node_modules/*) continue ;;
+  esac
+
+  for pattern in "${KEY_PATTERNS[@]}"; do
+    if git diff --cached -U0 "$file" 2>/dev/null | grep -qEi "^\+.*${pattern}"; then
+      echo "WARNING: $file may contain a real API key (matched pattern: ${pattern%%{*}*)"
+      echo "  If this is intentional, you can bypass with: git commit --no-verify"
+      echo "  But consider using config/local.env.example as a template instead."
+      blocked=1
+    fi
+  done
+done
+
+if [ "$blocked" -eq 1 ]; then
+  echo ""
+  echo "Commit blocked due to potential secrets. Use --no-verify to override."
+  exit 1
+fi
+
+exit 0

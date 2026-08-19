@@ -5,10 +5,10 @@
   providers (combo/qwen, combo/glm, combo/deepseek, combo/lmarena, combo/mimo,
   combo/mimo-web, combo/lmarena-fast/slow) via the dashboard API, (3) enables Claude Code's gateway model
   discovery (env vars + native-binary patch) so the /model picker shows the FULL live gateway catalog,
-  (4) seeds Claude Code's gateway-model cache with the FULL live catalog + combo/* routes so
-  older binaries show the same list AND an unpatched periodic refetch cannot collapse the
-  picker (the refetch only replaces the cache when the cache lacks a fetched id - a full
-  cache survives it), and (5) mirrors all of it into
+  (4) seeds Claude Code's gateway-model cache (for older binaries that read it) so the
+  /model picker shows the "auto" majors + combo/* routes + ALIVE NVIDIA NIM
+  (nvidia/*) + the free OpenCode Zen routes (opencode-zen/*-free, oc/*-free,
+  big-pickle) + the web-cookie chat routes (incl. mimo-web/*), and (5) mirrors all of it into
   availableModels - and keeps it that way across re-runs.
 
   -PickerOnly: ONLY the picker self-heal (env vars + binary patch on the VS Code
@@ -26,15 +26,14 @@
   BOTH filter sites in every installed Claude Code binary (the VS Code extension's
   native binary AND the standalone ~/.local/bin/claude.exe CLI) via
   patch-claude-picker.mjs (same-length byte replace, idempotent) so every gateway route
-  shows in the picker. It also seeds ~/.claude/cache/gateway-models.json with the FULL
-  live catalog + combo/* routes and pins fetchedAt ~1 year out for older Claude Code
-  builds that read the cache directly (a full cache also survives an UNPATCHED refetch,
-  keeping the picker complete even in the window after an auto-update).
+  shows in the picker. It also seeds ~/.claude/cache/gateway-models.json with the
+  curated routes below (a superset of what the curated /v1/models refetch can return,
+  so the refetch can never replace it with a claude-named-only subset) and pins
+  fetchedAt ~1 year out for older Claude Code builds that read the cache directly.
 
-  NOTE: the cache is seeded with the FULL catalog (not the curated subset below) - the
-  seeded list must be a superset of whatever the refetch returns, or the refetch
-  replaces it. The dead-NIM/non-chat exclusion list is still used when rebuilding
-  availableModels so user-facing allowlists stay clean.
+  Dead NIM models (404 upstream on build.nvidia.com) and non-chat models
+  (embed/rerank/asr/tts/image-gen/parse) are excluded, so the picker only shows
+  routes that actually answer /v1/chat/completions.
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File fix-model-cache.ps1
   powershell -ExecutionPolicy Bypass -File fix-model-cache.ps1 -Base http://localhost:20128
@@ -142,8 +141,12 @@ if (-not $bridgeUp) {
     )) { if (Test-Path $cand) { $bridgeScript = $cand; break } }
     if ($bridgeScript) {
         $bridgeLog = Join-Path $HOME '.omniroute\mimo-web-bridge.log'
+        # NB: PS 5.1 Start-Process REJECTS identical stdout/stderr redirect paths
+        # ("RedirectStandardOutput and RedirectStandardError are same") - the
+        # bridge-start branch silently crashed whenever the bridge was actually
+        # down. Use a separate .err file.
         Start-Process -FilePath 'node' -ArgumentList @($bridgeScript) -WindowStyle Hidden `
-            -RedirectStandardOutput $bridgeLog -RedirectStandardError $bridgeLog
+            -RedirectStandardOutput $bridgeLog -RedirectStandardError "$bridgeLog.err"
         Start-Sleep -Seconds 2
         try {
             $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$bridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
@@ -170,7 +173,59 @@ if ($bridgeUp) {
     }
 }
 
-} # end -PickerOnly skip (bridge)
+# ---- 1.5.5. ensure the DeepSeek web bridge is running + registered ----
+# deepseek-web is a local OpenAI-compatible bridge (bridge/deepseek-web-bridge/
+# bridge.mjs) that answers deepseek-web/* with AUTO-CONTINUE: DeepSeek's web API
+# ends long responses with status INCOMPLETE (the "Continue generating" button)
+# and the gateway's built-in executor truncates there. The bridge continues the
+# stream automatically (up to 8 rounds) so long chats complete. Token (userToken)
+# is pushed by Cookie Pusher -> Grab & push sessions.
+$dsBridgePort = 20136
+$dsBridgeUp = $false
+try {
+    $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$dsBridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
+    $dsBridgeUp = ($probe.StatusCode -eq 200)
+} catch { $dsBridgeUp = $false }
+if (-not $dsBridgeUp) {
+    $dsBridgeScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'bridge\deepseek-web-bridge\bridge.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\bridge\deepseek-web-bridge\bridge.mjs'),
+        (Join-Path $HOME '.omniroute\bridge\deepseek-web-bridge\bridge.mjs')
+    )) { if (Test-Path $cand) { $dsBridgeScript = $cand; break } }
+    if ($dsBridgeScript) {
+        $dsBridgeLog = Join-Path $HOME '.omniroute\deepseek-web-bridge.log'
+        # NB: PS 5.1 Start-Process REJECTS identical stdout/stderr redirect paths
+        # - use a separate .err file (same bug as the mimo bridge start).
+        Start-Process -FilePath 'node' -ArgumentList @($dsBridgeScript) -WindowStyle Hidden `
+            -RedirectStandardOutput $dsBridgeLog -RedirectStandardError "$dsBridgeLog.err"
+        Start-Sleep -Seconds 2
+        try {
+            $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$dsBridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
+            $dsBridgeUp = ($probe.StatusCode -eq 200)
+        } catch { $dsBridgeUp = $false }
+        if ($dsBridgeUp) { Write-Host "DeepSeek web bridge started ($dsBridgeScript, auto-continue)" -ForegroundColor Green }
+        else { Write-Host 'DeepSeek web bridge NOT running (node missing?) - deepseek-web routes will not appear' -ForegroundColor Yellow }
+    } else {
+        Write-Host 'DeepSeek web bridge script not found - deepseek-web routes skipped' -ForegroundColor Yellow
+    }
+} else {
+    Write-Host 'DeepSeek web bridge already running' -ForegroundColor DarkGray
+}
+if ($dsBridgeUp) {
+    $dsRegisterScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'bridge\deepseek-web-bridge\register-deepseek-web.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\bridge\deepseek-web-bridge\register-deepseek-web.mjs'),
+        (Join-Path $HOME '.omniroute\bridge\deepseek-web-bridge\register-deepseek-web.mjs')
+    )) { if (Test-Path $cand) { $dsRegisterScript = $cand; break } }
+    if ($dsRegisterScript) {
+        & node $dsRegisterScript | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Host 'deepseek-web node + connection registered' -ForegroundColor DarkGray }
+    }
+}
+
+} # end -PickerOnly skip (bridges)
 
 # ---- 1.6.5. fast modes ----
 # -CombosOnly: skip the Claude Code picker patch, cache seed and availableModels
@@ -461,16 +516,7 @@ try {
     Write-Host "combo route sync skipped (dashboard API unreachable): $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
-# The list that lands in the cache/availableModels/Codex catalog: the FULL
-# live catalog + combo/* routes (NOT the curated subset above). The seeded list
-# must be a SUPERSET of whatever the [gatewayDiscovery] refetch returns - that
-# refetch only KEEPS the cached list when it already contains every id it
-# fetched, so a full cache survives even an UNPATCHED refetch (the picker stays
-# complete in the window after a Claude Code auto-update, before the watchdog
-# re-patches the binary), and once the patched refetch runs it converges to the
-# same full list anyway. Older binaries that read the cache directly then show
-# the same full catalog the patched binary shows.
-$models = @($catalogIds + $comboRoutes + $mimoWeb | Sort-Object -Unique)
+$models = @($auto + $autoMajors + $nvidia + $ocFree + $orFree + $webChat + $mimo + $mimoWeb + $comboRoutes + $curated | Sort-Object -Unique)
 if ($models.Count -eq 0) {
     Write-Host 'No routes discovered - gateway unreachable or catalog empty?' -ForegroundColor Red
     exit 1
@@ -491,7 +537,7 @@ $cache = [ordered]@{
 }
 $json = $cache | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($cacheFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "Cache seeded: FULL live catalog $($models.Count) routes (auto/* majors + combo/* + nvidia + free tiers + web-chat + mimo + curated) -> $cacheFile" -ForegroundColor Green
+Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majors + $($comboRoutes.Count) combo/* routes + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena/deepseek) + $($mimo.Count) mimo + $($mimoWeb.Count) mimo-web + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
 
 } # end -CombosOnly skip (cache seed)
 
@@ -519,11 +565,43 @@ if (Test-Path $ccFile) {
         $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue $merged -Force
         $json = $cc | ConvertTo-Json -Depth 12
         [System.IO.File]::WriteAllText($ccFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-        Write-Host "availableModels rebuilt -> $($merged.Count) routes (full live catalog + combo/* routes)" -ForegroundColor Green
+        Write-Host "availableModels rebuilt -> $($merged.Count) routes (auto/* majors + combo/* routes mirrored, dead NIM removed)" -ForegroundColor Green
     }
 }
 
 } # end -CombosOnly skip (availableModels)
+
+# ---- 4.25. GATEWAY CURATION: hide every non-curated route so /v1/models (and
+#      therefore the Claude/Codex discovery pickers, which read it LIVE) show
+#      EXACTLY the curated free-model catalog - no gazillions, and no model is
+#      ever "restricted by your organization's settings" (every curated route
+#      is in the entitlement list). Writes modelCompatOverrides rows into
+#      ~/.omniroute/storage.sqlite (same contract as the dashboard hide eye).
+#      Idempotent; SKIP_CURATE=1 disables.
+if (-not $CombosOnly -and $env:SKIP_CURATE -ne '1') {
+    $curateScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'curate-gateway.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\curate-gateway.mjs'),
+        (Join-Path $HOME '.omniroute\curate-gateway.mjs')
+    )) { if (Test-Path $cand) { $curateScript = $cand; break } }
+    if ($curateScript) {
+        $dbPath = Join-Path $HOME '.omniroute\storage.sqlite'
+        if (Test-Path $dbPath) {
+            $tmpList = Join-Path $env:TEMP "omniroute-curated-$([guid]::NewGuid().ToString('N')).txt"
+            $models | Set-Content -Path $tmpList -Encoding UTF8
+            try {
+                & node $curateScript $dbPath $Base $adminToken $tmpList 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor DarkGray }
+            } finally {
+                Remove-Item $tmpList -Force -ErrorAction SilentlyContinue
+            }
+        } else {
+            Write-Host 'Gateway DB not found - curation skipped (start the gateway once first)' -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host 'curate-gateway.mjs not found - skipping gateway curation' -ForegroundColor Yellow
+    }
+}
 
 # ---- 4.5. Codex CLI model catalog (model_catalog_json) ----
 # Codex's /model picker only shows OpenAI's built-in models by default. Point it

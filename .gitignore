@@ -14,3 +14,14 @@ bridge/flow-browser/outputs/
 bridge/flow-browser/screenshots-debug/
 bridge/flow-browser/.flow-projects.json
 __pycache__/
+
+# OmniRoute kit - secrets & machine state (never commit)
+local.env
+config/local.env
+omniroute-transfer.tar.gz
+*.tar.gz
+.venv/
+
+# Environment files (never commit secrets)
+*.env
+.env.*

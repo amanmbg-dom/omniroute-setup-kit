@@ -47,15 +47,15 @@ gh repo clone amanmbg-dom/omniroute-setup-kit omniroute-kit
 # 2. Copy your local.env (from the other machine, or recreate it)
 #    Option A: copy the file manually (USB, secure transfer, etc.)
 #    Option B: recreate it — the example template is in the repo:
-copy config\local.env.example config\local.env
-#    Then fill in your API keys in config\local.env
+copy configlocal.env.example configlocal.env
+#    Then fill in your API keys in configlocal.env
 
 # 3. Run setup
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
 **Quick transfer between your own machines:** if both machines have the kit,
-you can copy `config\local.env` directly (USB drive, secure cloud paste,
+you can copy `configlocal.env` directly (USB drive, secure cloud paste,
 `scp`, etc.) — the file is small and plain text.
 
 ### Forking for others (private repo, no keys)
@@ -313,23 +313,25 @@ the Claude Code input so `/cycle-model` is one keystroke + Enter away
 ANTHROPIC_MODEL=nvidia/nvidia/nemotron-ultra-550b claude
 ```
 
-The `/model` picker shows the **full live gateway catalog** (auto/* majors,
+The `/model` picker shows the **curated live gateway catalog** (auto/* majors,
 combo/* routes, mimo-web/*, lmarena/*, qwen-web/zai-web/deepseek-web,
-NVIDIA NIM, OpenCode/OpenRouter free routes — 2600+ entries). This is driven
-by Claude Code's gateway model discovery (`CLAUDE_CODE_USE_GATEWAY` +
+NVIDIA NIM alive, OpenCode/OpenRouter free routes — curated by
+`curate-gateway.mjs`, section 4.25). This is driven by Claude Code's gateway
+model discovery (`CLAUDE_CODE_USE_GATEWAY` +
 `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` + the `patch-claude-picker.mjs`
 native-binary patch, applied by `fix-model-cache.ps1`). The patch covers BOTH
 gateway-discovery filter sites in the binary — the `[Bootstrap]` fetch and the
 `[gatewayDiscovery]` periodic refetch (the refetch used to replace the cached
 model list with its claude/anthropic-filtered result, collapsing the picker
-again — the “it worked, then broke again” loop) — and is applied to the VS
-Code extension binary AND the standalone `~/.local/bin/claude.exe` CLI. It is
-re-applied at every logon and every 5 minutes by the `OmniRoute-Watchdog`
-task (`-PickerOnly`), so a Claude Code auto-update self-heals within minutes
-instead of at the next reboot. The gateway-model cache and `availableModels`
-are seeded with the full catalog + combo/* routes as a fallback for older
-builds — a full cache also survives an unpatched refetch, keeping the picker
-complete even in the update window.
+again — the “it worked, then broke again” loop) — plus the `limit:1000`
+catalog cap, and is applied to the VS Code extension binary AND the standalone
+`~/.local/bin/claude.exe` CLI. It is re-applied at every logon and every 5
+minutes by the `OmniRoute-Watchdog` task (`-PickerOnly`), so a Claude Code
+auto-update self-heals within minutes instead of at the next reboot.
+`availableModels` and the gateway-model cache are seeded with the same curated
+list, which is a superset of what the curated `/v1/models` refetch can return
+— so the refetch can never replace it with a claude-named-only subset and the
+picker stays complete even in the update window.
 
 **Per-family routing routes** — `fix-model-cache.ps1` also creates
 `combo/*` routes for the cookie/web providers (`combo/qwen`, `combo/glm`,
