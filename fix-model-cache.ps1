@@ -268,6 +268,17 @@ if (Test-Path $ccFile) {
         Write-Host 'settings.json env: CLAUDE_CODE_USE_GATEWAY + CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY added' -ForegroundColor Green
     }
 }
+# CRITICAL: Also set at OS User level. The Bootstrap model discovery runs
+# BEFORE settings.json env vars are applied, so it needs the env var to
+# already exist in the process environment. Without this, Bootstrap is
+# skipped and the picker only shows built-in Claude-only models.
+foreach ($kv in @(@('CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY', '1'), @('ANTHROPIC_BASE_URL', 'http://localhost:20128'), @('ANTHROPIC_AUTH_TOKEN', 'omniroute')) {
+    $cur = [Environment]::GetEnvironmentVariable($kv[0], 'User')
+    if ($cur -ne $kv[1]) {
+        [Environment]::SetEnvironmentVariable($kv[0], $kv[1], 'User')
+        Write-Host "User env: $($kv[0])=$($kv[1]) (was: $cur)" -ForegroundColor Green
+    }
+}
 $patcher = $null
 foreach ($cand in @(
     (Join-Path $PSScriptRoot 'patch-claude-picker.mjs'),
