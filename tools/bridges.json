@@ -1,0 +1,81 @@
+{
+  "bridges": [
+    {
+      "name": "gemini-bridge",
+      "type": "python",
+      "port": 20133,
+      "dir": "bridge/gemini-bridge",
+      "script": "bridge.py",
+      "healthPath": "/health",
+      "registerWithGateway": false,
+      "description": "Google Gemini free image generation via your signed-in session"
+    },
+    {
+      "name": "flowui",
+      "type": "python",
+      "port": 20134,
+      "dir": "bridge/flow-browser",
+      "script": "flowui.py",
+      "healthPath": "/",
+      "registerWithGateway": false,
+      "description": "Google Flow image generation (Nano Banana, Imagen 4)"
+    },
+    {
+      "name": "mimo-web",
+      "type": "node",
+      "port": 20135,
+      "dir": "bridge/mimo-web-bridge",
+      "script": "bridge.mjs",
+      "healthPath": "/healthz",
+      "cookiesNeeded": true,
+      "cookieFile": "mimo-cookies.json",
+      "registerWithGateway": false,
+      "description": "Xiaomi MiMo AI Studio web chat"
+    },
+    {
+      "name": "deepseek-web",
+      "type": "node",
+      "port": 20137,
+      "dir": "bridge/deepseek-web-bridge",
+      "script": "bridge.mjs",
+      "healthPath": "/healthz",
+      "cookiesNeeded": true,
+      "cookieFile": "deepseek-cookies.json",
+      "registerWithGateway": false,
+      "description": "DeepSeek web chat with search capabilities"
+    },
+    {
+      "name": "meta-web",
+      "type": "node",
+      "port": 20136,
+      "dir": "bridge/meta-web-bridge",
+      "script": "bridge.mjs",
+      "healthPath": "/healthz",
+      "cookiesNeeded": true,
+      "cookieFile": "meta-cookies.json",
+      "registerWithGateway": true,
+      "gatewayConnection": {
+        "name": "Meta Web (auto)",
+        "type": "openai-compatible",
+        "baseUrl": "http://127.0.0.1:20136",
+        "authType": "none",
+        "isActive": true,
+        "priority": 1
+      },
+      "description": "Meta AI (Llama models) web chat via meta.ai"
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Bridge plugin configuration for OmniRoute",
+    "howToAdd": "Edit this file or use: bridge-plugin-system.mjs add '{\"name\":\"...\",\"port\":...}'",
+    "ports": {
+      "20133": "gemini-bridge",
+      "20134": "flowui",
+      "20135": "mimo-web",
+      "20136": "meta-web",
+      "20137": "deepseek-web",
+      "20140": "omniroute-tools (MCP server)"
+    }
+  }
+}
