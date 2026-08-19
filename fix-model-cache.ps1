@@ -272,7 +272,7 @@ if (Test-Path $ccFile) {
 # BEFORE settings.json env vars are applied, so it needs the env var to
 # already exist in the process environment. Without this, Bootstrap is
 # skipped and the picker only shows built-in Claude-only models.
-foreach ($kv in @(@('CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY', '1'), @('ANTHROPIC_BASE_URL', 'http://localhost:20128'), @('ANTHROPIC_AUTH_TOKEN', 'omniroute')) {
+foreach ($kv in @(@('CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY', '1'), @('ANTHROPIC_BASE_URL', 'http://localhost:20128'), @('ANTHROPIC_AUTH_TOKEN', 'omniroute'))) {
     $cur = [Environment]::GetEnvironmentVariable($kv[0], 'User')
     if ($cur -ne $kv[1]) {
         [Environment]::SetEnvironmentVariable($kv[0], $kv[1], 'User')
