@@ -288,11 +288,22 @@ function Invoke-PickerPatch([string]$exePath, [string]$label) {
         Write-Host "Claude Code $label binary LOCKED (session running) - retrying on next run" -ForegroundColor Yellow
     }
 }
+# VS Code extension binary — two known locations across Claude Code versions:
+# 1. Old path: ~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe
+# 2. New path (>= 0.3.220): ~/AppData/Roaming/Code/agent-host/sdk-cache/claude/*/win32-x64/.../claude.exe
 $ccExt = Get-ChildItem (Join-Path $HOME '.vscode\extensions') -Directory -Filter 'anthropic.claude-code-*' -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending | Select-Object -First 1
 if ($ccExt) {
     $nativeExe = Join-Path $ccExt.FullName 'resources\native-binary\claude.exe'
     if (Test-Path $nativeExe) { Invoke-PickerPatch $nativeExe $ccExt.Name }
+}
+# New SDK-cache path (Claude Code >= 0.3.220)
+$sdkCache = Join-Path $HOME 'AppData\Roaming\Code\agent-host\sdk-cache\claude'
+if (Test-Path $sdkCache) {
+    $sdkExe = Get-ChildItem $sdkCache -Recurse -Filter 'claude.exe' -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -like '*claude-agent-sdk*' } |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($sdkExe) { Invoke-PickerPatch $sdkExe.FullName 'Claude Code SDK (>=0.3.220)' }
 }
 # Standalone CLI binary (~/.local/bin/claude.exe). This was never patched
 # before, so the terminal `claude` /model picker stayed filtered forever -
