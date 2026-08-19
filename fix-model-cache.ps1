@@ -279,6 +279,42 @@ foreach ($kv in @(@('CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY', '1'), @('ANTHR
         Write-Host "User env: $($kv[0])=$($kv[1]) (was: $cur)" -ForegroundColor Green
     }
 }
+# CRITICAL: Also inject into VS Code's claudeCode.environmentVariables.
+# The Bootstrap model discovery runs inside the agent-host binary, which
+# is spawned by VS Code's extension host. It checks process.env for the
+# env var, but the extension host only has env vars from VS Code's
+# startup environment. claudeCode.environmentVariables is how the
+# extension passes env vars to the agent-host process.
+$vsSettings = Join-Path $HOME 'AppData\Roaming\Code\User\settings.json'
+if (Test-Path $vsSettings) {
+    try {
+        $vs = Get-Content $vsSettings -Raw | ConvertFrom-Json
+        $cc = $vs.claudeCode
+        if (-not $cc) { $cc = [pscustomobject]@{} }
+        $envVars = @()
+        if ($cc.environmentVariables) { $envVars = @($cc.environmentVariables) }
+        $names = @($envVars | ForEach-Object { $_.name })
+        $needAdd = @(
+            @('CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY', 'true'),
+            @('CLAUDE_CODE_USE_GATEWAY', 'true'),
+            @('ANTHROPIC_BASE_URL', 'http://localhost:20128'),
+            @('ANTHROPIC_AUTH_TOKEN', 'omniroute'),
+            @('ANTHROPIC_MODEL', 'auto/coding:reliable'),
+            @('ANTHROPIC_SMALL_FAST_MODEL', 'auto/best-fast'),
+            @('CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT', '1')
+        ) | Where-Object { $_[0] -notin $names }
+        if ($needAdd.Count -gt 0) {
+            foreach ($kv in $needAdd) { $envVars += @{ name = $kv[0]; value = $kv[1] } }
+            $cc | Add-Member -NotePropertyName 'environmentVariables' -NotePropertyValue $envVars -Force
+            $vs.claudeCode = $cc
+            $json = $vs | ConvertTo-Json -Depth 12
+            [System.IO.File]::WriteAllText($vsSettings, $json, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "VS Code claudeCode.environmentVariables: added $($needAdd.Count) env vars" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "VS Code settings update skipped: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
 $patcher = $null
 foreach ($cand in @(
     (Join-Path $PSScriptRoot 'patch-claude-picker.mjs'),
