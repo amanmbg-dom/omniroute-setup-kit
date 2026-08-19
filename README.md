@@ -15,6 +15,8 @@ get the entire working free-model gateway:
   auto-refresh so expired sessions re-push themselves
 - **`auto` fallback pool** — keyless providers (felo, opencode built-in, agy,
   blackbox, duckduckgo-web, friendliai)
+- **Codex CLI wired too** — OpenAI's agent CLI gets the same free pool via the
+  gateway's native Responses API (`~/.codex/config.toml`, one line: `codex`)
 
 Everything lives in this repo except **one** thing: the script runs
 `npm install -g omniroute@3.8.49` (the gateway itself) if it isn't already
@@ -31,6 +33,46 @@ The script creates a **private** repo and pushes `main`. Then on any other
 machine: `git clone <url>` → run `setup.ps1`. (If you'd rather host it
 somewhere else — GitLab, Gitea, a USB stick — the kit is just a folder; copy
 it and run `setup.ps1` from there.)
+
+### Cloning on another machine (your own keys)
+
+`config/local.env` is **gitignored** — it never leaves your machine. To set up
+another machine with your own keys:
+
+```powershell
+# 1. Clone the repo
+gh repo clone amanmbg-dom/omniroute-setup-kit omniroute-kit
+# or: git clone <your-fork-url> omniroute-kit
+
+# 2. Copy your local.env (from the other machine, or recreate it)
+#    Option A: copy the file manually (USB, secure transfer, etc.)
+#    Option B: recreate it — the example template is in the repo:
+copy config\local.env.example config\local.env
+#    Then fill in your API keys in config\local.env
+
+# 3. Run setup
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+**Quick transfer between your own machines:** if both machines have the kit,
+you can copy `config\local.env` directly (USB drive, secure cloud paste,
+`scp`, etc.) — the file is small and plain text.
+
+### Forking for others (private repo, no keys)
+
+If you want someone else to use the kit with your private repo:
+
+1. **Create a fork** of the private repo on GitHub (Settings → Forks → Allow
+   forking to private repos, or just share the repo directly)
+2. They clone it — `config/local.env` is gitignored, so **no keys leak**
+3. They copy `config/local.env.example` to `config/local.env` and fill in
+   their own API keys
+4. Run `setup.ps1`
+
+The `.example` file shows every key with its registration URL and what it
+does. Keys left blank are simply skipped — the free providers still work
+without any keys at all (the `auto` fallback pool: felo, opencode built-in,
+agy, blackbox, duckduckgo-web, friendliai).
 
 ## One command — any new Windows device (even a BRAND-NEW, empty PC)
 
@@ -120,13 +162,26 @@ one manual step:
     extension**). Downloads the installer from claude.ai if the app isn't
     installed, launches it, and prints the sign-in guide. Standalone helper:
     `setup-desktop.cmd`
-10. Registers the gateway **and the flowui bridge** to **auto-start at login**
-    (Startup folder)
+9d. Installs the **Codex CLI** (`npm i -g @openai/codex`) and wires it to the
+    gateway (`~/.codex/config.toml` → `model_provider omniroute`, base
+    `http://localhost:20128/v1`). Current Codex accepts only the Responses API
+    for custom providers, and the gateway implements `/v1/responses` natively,
+    so no adapter is needed. Existing configs without the omniroute provider
+    are backed up to `config.toml.bak-kit` first.
+10. Registers the gateway, **flowui**, **gflow** (gemini-bridge) and **mimo-web**
+    bridges plus the logon self-heal to **auto-start at login — fully hidden**.
+    Startup holds tiny `.vbs` wrappers that run each service with no console
+    window and no flash (`launcher\start-hidden.vbs` is the same mechanism for
+    manual use). The `.cmd` launchers stay in the kit for visible manual runs.
+    The `OmniRoute-Watchdog` scheduled task (every 5 min **and** at logon)
+    probes the gateway **and all three bridges**, restarts anything that is
+    down (hidden), and re-syncs the `combo/*` routes after a gateway restart.
 
 Flags: `-SkipInstall`, `-SkipProviders`, `-SkipExtension`, `-SkipClaudeCode`,
-`-SkipAutoStart`, `-SkipBridge` (gemini-bridge), `-SkipFlowBridge` (flowui),
-`-SkipMimoBridge` (mimo-web), `-Pull` (git pull the kit first), `-UpdateSkills`
-(overwrite existing skills, backing up to `<name>.bak-kit`).
+`-SkipCodex`, `-SkipAutoStart`, `-SkipBridge` (gemini-bridge),
+`-SkipFlowBridge` (flowui), `-SkipMimoBridge` (mimo-web), `-Pull` (git pull the
+kit first), `-UpdateSkills` (overwrite existing skills, backing up to
+`<name>.bak-kit`).
 
 ## Update everything on an existing machine — one command
 
@@ -263,9 +318,18 @@ combo/* routes, mimo-web/*, lmarena/*, qwen-web/zai-web/deepseek-web,
 NVIDIA NIM, OpenCode/OpenRouter free routes — 2600+ entries). This is driven
 by Claude Code's gateway model discovery (`CLAUDE_CODE_USE_GATEWAY` +
 `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` + the `patch-claude-picker.mjs`
-native-binary patch, applied by `fix-model-cache.ps1` and re-applied
-automatically after every Claude Code auto-update). `availableModels` is still
-mirrored as a fallback allowlist for older builds.
+native-binary patch, applied by `fix-model-cache.ps1`). The patch covers BOTH
+gateway-discovery filter sites in the binary — the `[Bootstrap]` fetch and the
+`[gatewayDiscovery]` periodic refetch (the refetch used to replace the cached
+model list with its claude/anthropic-filtered result, collapsing the picker
+again — the “it worked, then broke again” loop) — and is applied to the VS
+Code extension binary AND the standalone `~/.local/bin/claude.exe` CLI. It is
+re-applied at every logon and every 5 minutes by the `OmniRoute-Watchdog`
+task (`-PickerOnly`), so a Claude Code auto-update self-heals within minutes
+instead of at the next reboot. The gateway-model cache and `availableModels`
+are seeded with the full catalog + combo/* routes as a fallback for older
+builds — a full cache also survives an unpatched refetch, keeping the picker
+complete even in the update window.
 
 **Per-family routing routes** — `fix-model-cache.ps1` also creates
 `combo/*` routes for the cookie/web providers (`combo/qwen`, `combo/glm`,
@@ -286,6 +350,118 @@ vars, and reseeds the cache — a scheduled task runs it at logon, so Claude
 Code auto-updates self-heal) and reload the VS Code window.
 
 Skip with `-SkipClaudeCode` if you want to leave Claude Code alone.
+
+## Codex CLI (OpenAI's agent — same free pool)
+
+`setup.ps1` also installs the **Codex CLI** (`npm i -g @openai/codex`) and
+wires it to the gateway by writing `~/.codex/config.toml`:
+
+```toml
+model = "auto/coding:reliable"
+model_provider = "omniroute"
+
+[model_providers.omniroute]
+name = "OmniRoute free pool (localhost:20128)"
+base_url = "http://localhost:20128/v1"
+experimental_bearer_token = "omniroute"
+```
+
+Current Codex accepts only the **Responses API** for custom providers
+(`wire_api = "responses"` is the only supported value), and the gateway
+implements `/v1/responses` natively — so Codex points straight at it, no
+adapter. The token is the gateway's localhost magic token, not a real secret
+(same value as Claude Code's `ANTHROPIC_AUTH_TOKEN`). If a
+`~/.codex/config.toml` already exists **without** the omniroute provider, it
+is backed up to `config.toml.bak-kit` before the kit's block is written, so
+local customizations are never silently clobbered.
+
+Then just run `codex` in any folder — traffic goes to the free pool. Switch
+models any time with `-m`, or use it non-interactively:
+
+```bash
+codex -m auto/best-fast
+codex -m combo/qwen
+codex -m nvidia/nvidia/nemotron-ultra-550b
+codex exec "explain this repo"
+```
+
+### The `/model` picker shows the gateway routes
+
+By default Codex only lists OpenAI's built-in models in `/model`. The kit
+generates a **model catalog** from the live gateway (same curated list the
+Claude Code picker gets — `auto/*`, `combo/*`, `lmarena/*`, `qwen-web/*`,
+`zai-web/*`, `deepseek-web/*`, `mimo-web/*`, alive `nvidia/*`, OpenCode/OpenRouter
+free routes) and wires it into `config.toml`:
+
+```toml
+model_catalog_json = "C:/Users/<you>/.codex/model-catalogs/omniroute.json"
+```
+
+So the picker lets you browse and switch between all ~270 gateway routes.
+`fix-model-cache.ps1` rebuilds the catalog from the live catalog (run it after
+adding providers, or the `OmniRoute-Watchdog` scheduled task refreshes it
+after a gateway restart), and the path uses forward slashes because TOML
+basic strings treat backslashes as escapes.
+
+The kit also ships **model profiles** — `codex --profile <name>` overlays
+`~/.codex/<name>.config.toml` and switches the route in one flag:
+
+| Profile | Route | When |
+|---|---|---|
+| `--profile fast` | `auto/best-fast` | quick questions, low-latency tasks |
+| `--profile coding` | `auto/best-coding` | everyday coding |
+| `--profile reasoning` | `auto/best-reasoning` | hard problems, math, planning |
+| `--profile vision` | `auto/best-vision` | screenshots / image input |
+
+```bash
+codex --profile reasoning "design the retry/backoff algorithm"
+codex exec --profile fast "summarize this diff"
+```
+
+Skip with `-SkipCodex` if you want to leave Codex alone.
+
+## Gateway watchdog (self-healing)
+
+The gateway occasionally wedges: the port keeps listening but HTTP requests
+hang (CLOSE_WAIT sockets pile up) — which looks like "the routes disappeared"
+and makes tool calls time out. `setup.ps1` registers an
+**`OmniRoute-Watchdog`** scheduled task (every 5 minutes) that:
+
+1. Probes `http://127.0.0.1:20128/v1/models` — exits immediately when healthy.
+2. If a listener is unresponsive for 30s, kills it (the gateway package's own
+   supervisor respawns the server within seconds).
+3. Starts the launcher only if nothing is running at all.
+4. Re-syncs the `combo/*` routes and the Codex model catalog after a restart.
+
+`launcher/watchdog.ps1` runs from a stable copy at `~/.omniroute/watchdog.ps1`
+and logs to `~/.omniroute/watchdog.log`. The gateway launcher also raises the
+Node heap (`NODE_OPTIONS=--max-old-space-size=6144`) — the wrapper honors a
+user-pinned heap — so the 2600+ route catalog / 250-model combo resolution
+stays well under memory pressure — and the watchdog proactively restarts the
+gateway if its working set climbs past 5 GB (the wedge has been seen at ~2 GB
+and growing), before it can stall.
+
+## Headless (invisible) — browsers AND console windows
+
+Everything the kit starts runs with **nothing visible on screen**:
+
+- **Browsers**: the only web-cookie work that opens a real browser is the
+  **z.ai captcha worker** (`ZAI_CAPTCHA_WORKER`) — a Chrome window appears for a
+  few seconds whenever z.ai challenges the account (HTTP 405) and needs a fresh
+  Aliyun anti-bot token. This is the ONE component that cannot run headless:
+  Aliyun's anti-bot detects headless Chrome (verifyResult F001) and refuses the
+  solve, so the 405 challenge never clears and zai stays broken. The kit keeps
+  the worker headed (`patch-zai-captcha-headed.mjs`, same-length byte replace,
+  idempotent, re-applied by `fix-model-cache.ps1` / the logon `FixModelCache.cmd`
+  after every gateway update). The Google Flow image bridge is already headless
+  by default (`FLOW_HEADLESS=1`), the gflow/mimo bridges are plain HTTP servers,
+  and the Cookie Pusher extension needs no browser at all.
+- **Console windows**: every Startup entry is a tiny `.vbs` wrapper that runs
+  the service with window style 0 — no console window, no flash at login. The
+  gateway starts with `--no-open` (no dashboard tab), and the watchdog, the
+  logon self-heal and every auto-restart use `-WindowStyle Hidden` / `SW_HIDE`
+  as well. The `.cmd` launchers in the kit still show output when you run them
+  manually — only the automatic paths are invisible.
 
 ## Using the models in OTHER apps (not just Claude Code)
 
@@ -406,9 +582,12 @@ a DNS route with your own domain for a permanent URL.
 
 ## Security notes
 
-- `config/local.env` contains **live API keys**. Keep this repo **private**;
-  if you ever plan to share/publish it, empty the keys and distribute them
-  out-of-band (the script just skips empty ones).
+- `config/local.env` contains **live API keys**. It is **gitignored** and
+  never committed to the repo. Keep the repo private; if you ever plan to
+  make it public, empty the keys first (the script just skips empty ones).
+- `config/local.env.example` is a **safe template** — no real keys, just
+  placeholders and registration URLs. It IS committed so others know what
+  to fill in.
 - The dashboard password defaults to `CHANGEME` — change it in Settings on
   first login. The gateway listens on all interfaces and stores your keys.
 - The extension's token grants local OmniRoute admin — it never leaves the

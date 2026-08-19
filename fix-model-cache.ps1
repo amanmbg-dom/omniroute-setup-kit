@@ -5,32 +5,63 @@
   providers (combo/qwen, combo/glm, combo/deepseek, combo/lmarena, combo/mimo,
   combo/mimo-web, combo/lmarena-fast/slow) via the dashboard API, (3) enables Claude Code's gateway model
   discovery (env vars + native-binary patch) so the /model picker shows the FULL live gateway catalog,
-  (4) seeds Claude Code's gateway-model cache (for older binaries that read it) so the
-  /model picker shows the "auto" majors + combo/* routes + ALIVE NVIDIA NIM
-  (nvidia/*) + the free OpenCode Zen routes (opencode-zen/*-free, oc/*-free,
-  big-pickle) + the web-cookie chat routes (incl. mimo-web/*), and (5) mirrors all of it into
+  (4) seeds Claude Code's gateway-model cache with the FULL live catalog + combo/* routes so
+  older binaries show the same list AND an unpatched periodic refetch cannot collapse the
+  picker (the refetch only replaces the cache when the cache lacks a fetched id - a full
+  cache survives it), and (5) mirrors all of it into
   availableModels - and keeps it that way across re-runs.
+
+  -PickerOnly: ONLY the picker self-heal (env vars + binary patch on the VS Code
+  extension AND the standalone ~/.local/bin/claude.exe CLI). Used by the gateway
+  watchdog every 5 minutes so an auto-updated binary is re-patched within minutes
+  instead of waiting for the next logon. Idempotent; retried automatically when a
+  running Claude Code session locks the binary.
 .DESCRIPTION
   Claude Code >= 2.1.233 filters the gateway catalog to claude/anthropic-named ids when
-  building the /model picker. This script sets CLAUDE_CODE_USE_GATEWAY +
-  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY and byte-patches the installed native
-  binary's bootstrap filter (patch-claude-picker.mjs, same-length byte replace,
-  idempotent) so every gateway route shows in the picker. It also seeds
-  ~/.claude/cache/gateway-models.json with the routes below and pins fetchedAt
-  ~1 year out for older Claude Code builds that read the cache directly.
+  building the /model picker - in TWO places: the [Bootstrap] fetch AND the
+  [gatewayDiscovery] periodic refetch (the refetch replaces the cached model list,
+  collapsing the picker back to claude-named models even after the bootstrap site is
+  patched - the "it worked, then broke again" loop). This script sets
+  CLAUDE_CODE_USE_GATEWAY + CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY and byte-patches
+  BOTH filter sites in every installed Claude Code binary (the VS Code extension's
+  native binary AND the standalone ~/.local/bin/claude.exe CLI) via
+  patch-claude-picker.mjs (same-length byte replace, idempotent) so every gateway route
+  shows in the picker. It also seeds ~/.claude/cache/gateway-models.json with the FULL
+  live catalog + combo/* routes and pins fetchedAt ~1 year out for older Claude Code
+  builds that read the cache directly (a full cache also survives an UNPATCHED refetch,
+  keeping the picker complete even in the window after an auto-update).
 
-  Dead NIM models (404 upstream on build.nvidia.com) and non-chat models
-  (embed/rerank/asr/tts/image-gen/parse) are excluded, so the picker only shows
-  routes that actually answer /v1/chat/completions.
+  NOTE: the cache is seeded with the FULL catalog (not the curated subset below) - the
+  seeded list must be a superset of whatever the refetch returns, or the refetch
+  replaces it. The dead-NIM/non-chat exclusion list is still used when rebuilding
+  availableModels so user-facing allowlists stay clean.
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File fix-model-cache.ps1
   powershell -ExecutionPolicy Bypass -File fix-model-cache.ps1 -Base http://localhost:20128
+  powershell -ExecutionPolicy Bypass -File fix-model-cache.ps1 -PickerOnly   (watchdog fast heal: env vars + binary patch only)
 #>
 param(
     [string]$Base = 'http://localhost:20128',
-    [string]$Token = 'omniroute'
+    [string]$Token = 'omniroute',
+    [switch]$CombosOnly,
+    [switch]$PickerOnly
 )
 $ErrorActionPreference = 'Stop'
+
+# ---- 0.5. self-healing Startup .vbs guard ----
+# Keep the login .vbs launchers on the hardened template (%USERPROFILE% +
+# On Error Resume Next + log fallback). The watchdog scheduled task runs the
+# same check every 5 min (immune to vbs breakage); this copy just repairs
+# immediately at login when the vbs chain itself is healthy.
+$guardScript = $null
+foreach ($cand in @(
+    (Join-Path $PSScriptRoot 'guard-startup-vbs.ps1'),
+    (Join-Path $HOME '.omniroute\guard-startup-vbs.ps1'),
+    (Join-Path $HOME 'omniroute-setup-kit\guard-startup-vbs.ps1')
+)) { if (Test-Path $cand) { $guardScript = $cand; break } }
+if ($guardScript) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $guardScript 2>&1 | Out-Null
+}
 
 # ---- 1. NIM models known to be dead or non-chat. The canonical list lives in
 #         config/nvidia-dead.json (shared with setup.ps1). 404 = retired from
@@ -95,6 +126,7 @@ $deadPattern = 'embed|rerank|asr|tts|whisper|fastpitch|tacotron|nvclip|flux|pars
 # that translates OpenAI chat to the aistudio.xiaomimimo.com web API using your
 # session cookie (pushed by the Cookie Pusher -> Grab & push sessions). It must
 # be up BEFORE the catalog fetch below so the mimo-web/* routes are discovered.
+if (-not $PickerOnly) {
 $bridgePort = 20135
 $bridgeUp = $false
 try {
@@ -138,16 +170,32 @@ if ($bridgeUp) {
     }
 }
 
+} # end -PickerOnly skip (bridge)
+
+# ---- 1.6.5. fast modes ----
+# -CombosOnly: skip the Claude Code picker patch, cache seed and availableModels
+# rebuild (used by the gateway watchdog after a restart - it only needs the
+# mimo-web bridge up + combo/* routes re-created + the Codex catalog refreshed).
+# -PickerOnly: ONLY the Claude Code picker self-heal (env vars + binary patch on
+# the VS Code extension AND the standalone ~/.local/bin/claude.exe CLI), used by
+# the gateway watchdog every 5 min so an auto-updated binary is re-patched within
+# minutes instead of waiting for the next logon. Idempotent; retried automatically
+# when a running Claude Code session locks the binary (patcher exit 5).
+if (-not $CombosOnly -or $PickerOnly) {
+
 # ---- 1.7. Claude Code picker: env vars + native-binary patch (self-healing) ----
 # Claude Code >= 2.1.233 builds the /model picker from the gateway catalog ONLY
-# through the "gateway model discovery" bootstrap, which (a) requires the env
-# vars below and (b) filters the catalog to claude/anthropic-named ids. We set
-# the env vars and byte-patch the bootstrap filter in the installed native
-# binary so EVERY gateway route (auto/*, combo/*, mimo-web/*, lmarena/*, ...)
-# shows in the picker. The patch is a same-length byte replace, idempotent, and
-# re-applied automatically here after every Claude Code auto-update. This
-# supersedes the old gateway-models.json cache seeding (still kept below for
-# older binaries that read it directly).
+# through "gateway model discovery", which (a) requires the env vars below and
+# (b) filters the catalog to claude/anthropic-named ids in TWO places - the
+# [Bootstrap] fetch and the [gatewayDiscovery] periodic refetch. The refetch
+# REPLACES the cached model list with its filtered result, so patching only the
+# bootstrap site made the picker collapse again on the next refetch ("worked,
+# then broke again"). patch-claude-picker.mjs byte-patches EVERY filter site
+# (same-length replace, idempotent) in the VS Code extension's native binary
+# AND the standalone ~/.local/bin/claude.exe CLI, so every gateway route
+# (auto/*, combo/*, mimo-web/*, lmarena/*, ...) shows in the picker. Re-applied
+# automatically here after every Claude Code auto-update, and every 5 minutes
+# by the gateway watchdog (-PickerOnly).
 $ccFile = Join-Path $HOME '.claude\settings.json'
 if (Test-Path $ccFile) {
     $ccEnv = Get-Content $ccFile -Raw | ConvertFrom-Json
@@ -165,32 +213,101 @@ if (Test-Path $ccFile) {
         Write-Host 'settings.json env: CLAUDE_CODE_USE_GATEWAY + CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY added' -ForegroundColor Green
     }
 }
+$patcher = $null
+foreach ($cand in @(
+    (Join-Path $PSScriptRoot 'patch-claude-picker.mjs'),
+    (Join-Path $HOME 'omniroute-setup-kit\patch-claude-picker.mjs'),
+    (Join-Path $HOME '.omniroute\patch-claude-picker.mjs')
+)) { if (Test-Path $cand) { $patcher = $cand; break } }
+if (-not $patcher) {
+    Write-Host 'patch-claude-picker.mjs not found - picker will only show claude-named routes' -ForegroundColor Yellow
+}
+function Invoke-PickerPatch([string]$exePath, [string]$label) {
+    if (-not $patcher) { return }
+    & node $patcher $exePath 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor Cyan }
+    if ($LASTEXITCODE -eq 0) { Write-Host "Claude Code picker patch ok ($label)" -ForegroundColor Green }
+    elseif ($LASTEXITCODE -eq 3) {
+        Write-Host "Claude Code $label updated - picker patch anchor missing; this build needs re-review" -ForegroundColor Yellow
+    }
+    elseif ($LASTEXITCODE -eq 5) {
+        Write-Host "Claude Code $label binary LOCKED (session running) - retrying on next run" -ForegroundColor Yellow
+    }
+}
 $ccExt = Get-ChildItem (Join-Path $HOME '.vscode\extensions') -Directory -Filter 'anthropic.claude-code-*' -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending | Select-Object -First 1
 if ($ccExt) {
     $nativeExe = Join-Path $ccExt.FullName 'resources\native-binary\claude.exe'
-    if (Test-Path $nativeExe) {
-        $patcher = $null
-        foreach ($cand in @(
-            (Join-Path $PSScriptRoot 'patch-claude-picker.mjs'),
-            (Join-Path $HOME 'omniroute-setup-kit\patch-claude-picker.mjs'),
-            (Join-Path $HOME '.omniroute\patch-claude-picker.mjs')
-        )) { if (Test-Path $cand) { $patcher = $cand; break } }
-        if ($patcher) {
-            & node $patcher $nativeExe 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor Cyan }
-            if ($LASTEXITCODE -eq 0) { Write-Host "Claude Code picker patch ok ($($ccExt.Name))" -ForegroundColor Green }
-            elseif ($LASTEXITCODE -eq 3) {
-                Write-Host 'Claude Code updated - picker patch anchor missing; this build needs re-review' -ForegroundColor Yellow
-            }
-        } else {
-            Write-Host 'patch-claude-picker.mjs not found - picker will only show claude-named routes' -ForegroundColor Yellow
-        }
-    }
+    if (Test-Path $nativeExe) { Invoke-PickerPatch $nativeExe $ccExt.Name }
 }
+# Standalone CLI binary (~/.local/bin/claude.exe). This was never patched
+# before, so the terminal `claude` /model picker stayed filtered forever -
+# patch it with the same patcher (it finds ALL filter sites in any binary).
+$cliExe = Join-Path $HOME '.local\bin\claude.exe'
+if (Test-Path $cliExe) { Invoke-PickerPatch $cliExe 'CLI (~/.local/bin/claude.exe)' }
+
+# -PickerOnly (watchdog fast heal): env vars + binary patch is all we need -
+# no bridge, no catalog, no combos, no cache. Exit before any of that runs.
+if ($PickerOnly) {
+    Write-Host 'Picker-only mode done (watchdog fast heal) - cache/combos untouched.' -ForegroundColor DarkGray
+    exit 0
+}
+
+} # end -CombosOnly skip (picker patch + cache + availableModels)
+
+# ---- 1.8. zai captcha worker: keep Chrome HEADED (a real browser is REQUIRED) ----
+# The gateway's ZAI_CAPTCHA_WORKER launches a Playwright Chrome to solve z.ai's
+# Aliyun traceless captcha whenever the account is challenged (HTTP 405 block
+# page). We tried making it headless - but Aliyun's anti-bot detects headless
+# Chrome (verifyResult F001) and refuses every solve, so the 405 challenge
+# could never clear and zai-web stayed broken (173 worker failures in a day vs
+# 2 in the previous 5 days). zai is the ONE component that cannot run headless;
+# its captcha window appears only for a few seconds when z.ai issues a
+# challenge. patch-zai-captcha-headed.mjs ensures the worker is headed
+# (idempotent; re-applied after every gateway npm update). Runs in both modes.
+if (-not $PickerOnly) {
+$zaiPatcher = $null
+foreach ($cand in @(
+    (Join-Path $PSScriptRoot 'patch-zai-captcha-headed.mjs'),
+    (Join-Path $HOME 'omniroute-setup-kit\patch-zai-captcha-headed.mjs'),
+    (Join-Path $HOME '.omniroute\patch-zai-captcha-headed.mjs')
+)) { if (Test-Path $cand) { $zaiPatcher = $cand; break } }
+if ($zaiPatcher) {
+    & node $zaiPatcher 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor Cyan }
+    if ($LASTEXITCODE -eq 3) {
+        Write-Host 'zai captcha worker updated - headed/patched anchor missing; this build needs re-review' -ForegroundColor Yellow
+    }
+} else {
+    Write-Host 'patch-zai-captcha-headed.mjs not found - zai captcha worker left as-is' -ForegroundColor Yellow
+}
+
+} # end -PickerOnly skip (zai patch)
 
 # ---- 2. discover routes from the live gateway ----
 Write-Host "Fetching catalog from $Base/v1/models ..." -ForegroundColor Cyan
-$catalog = Invoke-RestMethod -Uri "$Base/v1/models" -Headers @{ Authorization = "Bearer $Token" } -TimeoutSec 60
+# /v1/models aggregates every provider and can take 30s+ after a gateway
+# restart - a single 60s attempt kept timing out at logon, aborting the whole
+# heal (ErrorActionPreference=Stop). Warm it up with a generous timeout, then
+# retry the real fetch a few times before giving up.
+$catalog = $null
+try {
+    Invoke-RestMethod -Uri "$Base/v1/models" -Headers @{ Authorization = "Bearer $Token" } -TimeoutSec 120 | Out-Null
+    Write-Host 'catalog warmed (first request can be slow)' -ForegroundColor DarkGray
+} catch {
+    Write-Host "catalog warmup failed: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+foreach ($attempt in 1..3) {
+    try {
+        $catalog = Invoke-RestMethod -Uri "$Base/v1/models" -Headers @{ Authorization = "Bearer $Token" } -TimeoutSec 60
+        break
+    } catch {
+        Write-Host "catalog fetch attempt $attempt/3 failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
+    }
+}
+if (-not $catalog) {
+    Write-Host 'Catalog unreachable after retries - gateway down or wedged?' -ForegroundColor Red
+    exit 1
+}
 # bare "auto" route (auto-selects best available model) PLUS the auto/* "majors"
 # (auto/coding:reliable, auto/best-coding, auto/best-fast, auto/best-vision,
 # auto/best-reasoning, per-family auto/glm / auto/minimax / auto/zai, chaos,
@@ -242,15 +359,14 @@ $webChat = @($catalog.data | ForEach-Object { $_.id } | Where-Object {
     $_ -notmatch 'flux|seedream|ideogram|krea|recraft|qwen-image|wan[0-9]|photon|hidream|gpt-image|image-preview|mimo|cosmos|mercury|detector|embed|rerank'
 } | Sort-Object)
 # Curated free/working models from the other keyed providers (verified live against
-# /v1/messages on 2026-08-14 with real keys - a mix of fast + capable free models).
+# /v1/chat/completions on 2026-08-19 - a mix of fast + capable free models).
 # Casing matters for HuggingFace (HF router is case-sensitive on model ids).
+# groq/aion (403 Cloudflare block) and ollama-cloud (502 empty response) were
+# dropped 2026-08-19 after failing live probes.
 $curated = @(
-    'groq/llama-3.1-8b-instant',
     'mistral/mistral-medium-2505',
-    'aion/aion-labs/aion-2.0',
     'cohere/command-a-03-2025',
     'nscale/openai/gpt-oss-20b',
-    'ollama-cloud/gpt-oss:20b',
     'huggingface/meta-llama/Llama-3.1-8B-Instruct'
 )
 # keep only curated ids that the gateway actually exposes (harmless if a provider is unkeyed)
@@ -345,13 +461,23 @@ try {
     Write-Host "combo route sync skipped (dashboard API unreachable): $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
-$models = @($auto + $autoMajors + $nvidia + $ocFree + $orFree + $webChat + $mimo + $mimoWeb + $comboRoutes + $curated | Sort-Object -Unique)
+# The list that lands in the cache/availableModels/Codex catalog: the FULL
+# live catalog + combo/* routes (NOT the curated subset above). The seeded list
+# must be a SUPERSET of whatever the [gatewayDiscovery] refetch returns - that
+# refetch only KEEPS the cached list when it already contains every id it
+# fetched, so a full cache survives even an UNPATCHED refetch (the picker stays
+# complete in the window after a Claude Code auto-update, before the watchdog
+# re-patches the binary), and once the patched refetch runs it converges to the
+# same full list anyway. Older binaries that read the cache directly then show
+# the same full catalog the patched binary shows.
+$models = @($catalogIds + $comboRoutes + $mimoWeb | Sort-Object -Unique)
 if ($models.Count -eq 0) {
     Write-Host 'No routes discovered - gateway unreachable or catalog empty?' -ForegroundColor Red
     exit 1
 }
 
 # ---- 3. write the cache with a far-future fetchedAt (epoch ms) ----
+if (-not $CombosOnly) {
 $ccCache = Join-Path $HOME '.claude\cache'
 New-Item -ItemType Directory -Force -Path $ccCache | Out-Null
 $cacheFile = Join-Path $ccCache 'gateway-models.json'
@@ -365,9 +491,12 @@ $cache = [ordered]@{
 }
 $json = $cache | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($cacheFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majors + $($comboRoutes.Count) combo/* routes + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena/deepseek) + $($mimo.Count) mimo + $($mimoWeb.Count) mimo-web + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
+Write-Host "Cache seeded: FULL live catalog $($models.Count) routes (auto/* majors + combo/* + nvidia + free tiers + web-chat + mimo + curated) -> $cacheFile" -ForegroundColor Green
+
+} # end -CombosOnly skip (cache seed)
 
 # ---- 4. rebuild availableModels to mirror the picker (auto/* majors kept, dead NIM dropped) ----
+if (-not $CombosOnly) {
 $ccFile = Join-Path $HOME '.claude\settings.json'
 if (Test-Path $ccFile) {
     $cc = Get-Content $ccFile -Raw | ConvertFrom-Json
@@ -390,7 +519,94 @@ if (Test-Path $ccFile) {
         $cc | Add-Member -NotePropertyName 'availableModels' -NotePropertyValue $merged -Force
         $json = $cc | ConvertTo-Json -Depth 12
         [System.IO.File]::WriteAllText($ccFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-        Write-Host "availableModels rebuilt -> $($merged.Count) routes (auto/* majors + combo/* routes mirrored, dead NIM removed)" -ForegroundColor Green
+        Write-Host "availableModels rebuilt -> $($merged.Count) routes (full live catalog + combo/* routes)" -ForegroundColor Green
+    }
+}
+
+} # end -CombosOnly skip (availableModels)
+
+# ---- 4.5. Codex CLI model catalog (model_catalog_json) ----
+# Codex's /model picker only shows OpenAI's built-in models by default. Point it
+# at a local catalog file (model_catalog_json) cloned from a bundled model so
+# every gateway route (auto/*, combo/*, lmarena/*, mimo-web/*, ...) is
+# selectable. The catalog is rebuilt from the SAME curated $models list the
+# Claude Code picker cache uses, so both pickers stay in sync. Idempotent;
+# config.toml is only touched to add the root-level model_catalog_json line +
+# ensure the default model points at the gateway (user sections like
+# [projects.*] trust are preserved).
+if (Get-Command codex -ErrorAction SilentlyContinue) {
+    $codexDir = Join-Path $HOME '.codex'
+    New-Item -ItemType Directory -Force -Path (Join-Path $codexDir 'model-catalogs') | Out-Null
+    $catalogFile = Join-Path $codexDir 'model-catalogs\omniroute.json'
+    try {
+        # Clone the first bundled model (full required field set incl. base_instructions).
+        $bundled = (codex debug models --bundled 2>$null) | Out-String | ConvertFrom-Json
+        $tpl = $bundled.models[0]
+        if ($tpl) {
+            $entries = @()
+            $i = 0
+            foreach ($id in $models) {
+                $e = $tpl.PSObject.Copy()
+                $e.slug = $id
+                $e.display_name = $id
+                $e.description = "OmniRoute gateway route ($id) - free pool via localhost:20128"
+                $e.context_window = 200000
+                $e.max_context_window = 200000
+                $e.visibility = 'list'
+                $e.supported_in_api = $true
+                $e.priority = $i
+                $e.availability_nux = $null
+                $e.upgrade = $null
+                $entries += $e
+                $i++
+            }
+            $catalog = [ordered]@{ models = $entries }
+            [System.IO.File]::WriteAllText($catalogFile, ($catalog | ConvertTo-Json -Depth 12), (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "Codex catalog seeded: $($entries.Count) gateway routes -> $catalogFile" -ForegroundColor Green
+
+            # config.toml: add model_catalog_json at ROOT + keep default model on the gateway.
+            $codexCfg = Join-Path $codexDir 'config.toml'
+            if (Test-Path $codexCfg) {
+                $lines = @(Get-Content $codexCfg)
+                # root section = everything before the first [table] line
+                $rootEnd = $lines.Count
+                for ($n = 0; $n -lt $lines.Count; $n++) { if ($lines[$n] -match '^\s*\[') { $rootEnd = $n; break } }
+                $root = New-Object System.Collections.Generic.List[string]
+                for ($n = 0; $n -lt $rootEnd; $n++) { $root.Add($lines[$n]) }
+                $tail = @($lines | Select-Object -Skip $rootEnd)
+
+                # default model -> gateway route (in case the user/Codex switched it away)
+                $replaced = $false
+                for ($n = 0; $n -lt $root.Count; $n++) {
+                    if ($root[$n] -match '^\s*model\s*=' -and $root[$n] -notmatch 'model_provider' -and $root[$n] -notmatch 'model_catalog' -and $root[$n] -notmatch 'model_reasoning') {
+                        $root[$n] = 'model = "auto/coding:reliable"'
+                        $replaced = $true
+                        break
+                    }
+                }
+                if (-not $replaced) { $root.Insert(0, 'model = "auto/coding:reliable"') }
+
+                if (-not ($root | Where-Object { $_ -match '^\s*model_provider\s*=' })) { $root.Add('model_provider = "omniroute"') }
+                # TOML basic strings treat backslashes as escapes - use forward
+                # slashes (Windows APIs accept them) so the path never breaks parsing.
+                if (-not ($root | Where-Object { $_ -match 'model_catalog_json' })) { $root.Add('model_catalog_json = "' + ($catalogFile -replace '\\', '/') + '"') }
+
+                # Match the file's existing line-ending style (Codex writes LF,
+                # setup.ps1 writes CRLF) so idempotent re-runs never rewrite.
+                $curRaw = Get-Content $codexCfg -Raw
+                $nl = if ($curRaw -match "`r`n") { "`r`n" } else { "`n" }
+                $newToml = ($root -join $nl) + $nl
+                if ($tail.Count) { $newToml += (($tail -join $nl) + $nl) }
+                if ($newToml -ne $curRaw) {
+                    if (Test-Path "$codexCfg.bak-kit") { Remove-Item "$codexCfg.bak-kit" -Force }
+                    Copy-Item $codexCfg "$codexCfg.bak-kit" -Force
+                    [System.IO.File]::WriteAllText($codexCfg, $newToml, (New-Object System.Text.UTF8Encoding($false)))
+                    Write-Host "~/.codex/config.toml updated (model_catalog_json + default model auto/coding:reliable; backup at config.toml.bak-kit)" -ForegroundColor Green
+                }
+            }
+        }
+    } catch {
+        Write-Host "Codex catalog skipped: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
