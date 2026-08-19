@@ -541,6 +541,53 @@ Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majo
 
 } # end -CombosOnly skip (cache seed)
 
+# ---- 3.9. RESILIENCE SETTINGS: fast failover for faster responses ----
+# The default gateway resilience budget is extremely conservative (90s x 5 retries
+# = 300s total), which makes auto/* and combo/* routes take 27s+ when any upstream
+# provider is slow or rate-limited. These settings cut the budget to 60s total
+# (15s x 2 retries) so failing providers are skipped quickly.
+if (-not $CombosOnly) {
+    $dbPath = Join-Path $HOME '.omniroute\storage.sqlite'
+    if (Test-Path $dbPath) {
+        try {
+            $sqlite = [System.Data.SQLite.SQLiteConnection]::new("Data Source=$dbPath;Version=3;Read Only=False")
+            $sqlite.Open()
+            $cmd = $sqlite.CreateCommand()
+            $cmd.CommandText = "SELECT value FROM key_value WHERE namespace='settings' AND key='resilienceSettings'"
+            $existing = $cmd.ExecuteScalar()
+            $current = if ($existing) { $existing | ConvertFrom-Json } else { @{} }
+
+            $needsUpdate = $false
+            $target = @{
+                waitForCooldown = @{ enabled=$true; maxRetries=2; maxRetryWaitSec=15; maxRetryWaitMs=15000; budgetMs=60000 }
+                comboCooldownWait = @{ enabled=$true; maxWaitMs=15000; maxAttempts=2; budgetMs=60000 }
+                requestQueue = @{ maxWaitMs=15000 }
+                providerCooldown = @{ minRetryCooldownMs=2000; maxRetryCooldownMs=30000; enabled=$true }
+                streamRecovery = @{ enabled=$true; midstreamEnabled=$true }
+                quotaShareConcurrencyLimit = @{ enabled=$true }
+            }
+            foreach ($key in $target.Keys) {
+                if (-not $current.$key -or $current.$key.maxRetries -gt 3 -or $current.$key.budgetMs -gt 120000) {
+                    $needsUpdate = $true
+                    break
+                }
+            }
+            if ($needsUpdate) {
+                $json = $target | ConvertTo-Json -Depth 6 -Compress
+                $cmd.CommandText = "INSERT OR REPLACE INTO key_value (namespace, key, value) VALUES ('settings', 'resilienceSettings', @val)"
+                $cmd.Parameters.AddWithValue('@val', $json) | Out-Null
+                $cmd.ExecuteNonQuery() | Out-Null
+                Write-Host 'Resilience settings optimized: 15s x 2 retries = 60s budget (was 90s x 5 = 300s)' -ForegroundColor Green
+            } else {
+                Write-Host 'Resilience settings already optimized' -ForegroundColor DarkGray
+            }
+            $sqlite.Close()
+        } catch {
+            Write-Host "Resilience settings skipped: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+}
+
 # ---- 4. rebuild availableModels to mirror the picker (auto/* majors kept, dead NIM dropped) ----
 if (-not $CombosOnly) {
 $ccFile = Join-Path $HOME '.claude\settings.json'
