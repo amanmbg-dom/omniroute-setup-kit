@@ -443,6 +443,37 @@ stays well under memory pressure — and the watchdog proactively restarts the
 gateway if its working set climbs past 5 GB (the wedge has been seen at ~2 GB
 and growing), before it can stall.
 
+## Performance tuning — faster responses on big models
+
+The gateway's default resilience budget is extremely conservative (90s × 5
+retries = 300s total), which makes `auto/*` and `combo/*` routes take 27s+
+when any upstream provider is slow or rate-limited. The kit optimizes this in
+`fix-model-cache.ps1` (section 3.9) and `config/local.env`:
+
+| Setting | Default | Optimized | Why |
+|---|---|---|---|
+| `waitForCooldown.maxRetries` | 5 | **2** | Skip dead providers faster |
+| `waitForCooldown.maxRetryWaitSec` | 90 | **15** | Don't wait 90s per retry |
+| `waitForCooldown.budgetMs` | 300,000 | **60,000** | Total budget 60s, not 5min |
+| `comboCooldownWait.maxAttempts` | 5 | **2** | Fail over combos faster |
+| `comboCooldownWait.budgetMs` | 300,000 | **60,000** | Same budget cut |
+| `requestQueue.maxWaitMs` | 120,000 | **15,000** | Don't queue for 2 minutes |
+| `providerCooldown.maxMs` | 300,000 | **30,000** | 30s cooldown, not 5min |
+| `OMNIROUTE_DEFAULT_FETCH_TIMEOUT_MS` | 120,000 | **30,000** | 30s upstream timeout |
+| `OMNI_MAX_CONCURRENT_CONNECTIONS` | unlimited | **50** | Prevent memory bloat |
+| `STREAM_RECOVERY_ENABLED` | false | **true** | Recover mid-stream failures |
+
+**Results:**
+- `auto/best-coding`: 27s TIMEOUT → **8–10s** (stream TTFT: **6s**)
+- `auto/coding:reliable`: 27s TIMEOUT → **7–9s** (stream TTFT: **6s**)
+- `combo/deepseek`: 27s TIMEOUT → **10–12s** (stream TTFT: **16s**)
+- `combo/qwen`: 24s → **4s**
+- `mistral`: 3.2s → **2.8s**
+
+**Tip:** Always use `stream: true` in your requests. Streaming gives first
+tokens in 3–7s even on `auto/*` routes, while non-streaming waits for the
+full response. Claude Code streams by default.
+
 ## Headless (invisible) — browsers AND console windows
 
 Everything the kit starts runs with **nothing visible on screen**:
@@ -598,6 +629,83 @@ a DNS route with your own domain for a permanent URL.
   always-on box (old laptop/RPi/phone or a VPS) and point the extension's URL
   at it.
 
+## Provider status (last checked 2026-08-19)
+
+### Always-on (API key — no session needed)
+
+| Provider | Routes | Speed | Free tier | Notes |
+|---|---|---|---|---|
+| Mistral AI | 56 | 2.8s | 1 req/s, 30k tok/min | Fastest, most reliable |
+| Cohere | 27 | 2.7s | 1000 req/day | Very fast |
+| Hugging Face | 144 | 2.7s | Generous | Huge model catalog |
+| Nscale | 23 | 3.7s | 1000 req/day | Qwen, Llama, etc. |
+| NVIDIA NIM | 110 | varies | 1000 req/day | Nemotron Ultra 550B |
+| GitHub Models | 21 | varies | 15 req/min | Claude, GPT, Llama |
+| OpenCode Zen | 89 | varies | Free tier | GPT-5.x line, DeepSeek |
+| OpenRouter | 919 | varies | Free `:free` models | Huge catalog, needs $10 topup |
+| Cloudflare AI | 13 | varies | 10K neurons/day | Gemma, Llama |
+| DeepSeek | 2 | varies | Cheap | V4 Pro/Flash |
+| Aion Labs | 4 | varies | Free | AION models |
+
+### Web-session based (need Cookie Pusher)
+
+| Provider | Routes | Speed | Status | Fix |
+|---|---|---|---|---|
+| Qwen Web | 3 | 4.1s | ✅ Working | — |
+| DeepSeek Web | 14 | 10.8s | ✅ Working | — |
+| Z.ai GLM | 14 | 4s | ✅ Working | — |
+| Gemini Web | 3 | 13s | ✅ Working | — |
+| Claude Web | 37 | varies | ⚠️ Needs refresh | Cookie Pusher → Grab |
+| ChatGPT Web | 7 | varies | ⚠️ Rate limited | Wait or push new account |
+| MiMo Web | 12 | varies | ❌ No session | Sign in at aistudio.xiaomimimo.com |
+| Arena/LMArena | 95 | varies | ⚠️ Session expired | Log in at lmarena.ai |
+| HuggingChat | 24 | varies | ❌ Session expired | Log in at huggingface.co/chat |
+
+### Recommended combo routes (auto-fallback within family)
+
+| Route | What it does |
+|---|---|
+| `auto/coding:reliable` | **Default** — health-scored routing, skips dead providers |
+| `auto/best-coding` | Best coding model available right now |
+| `auto/best-fast` | Lowest latency, any model |
+| `auto/best-reasoning` | Hard problems, math, planning |
+| `auto/best-vision` | Image/screenshot input |
+| `combo/qwen` | Qwen Web: qwen3.8-max → qwen3.7-max → qwen3.7-plus |
+| `combo/glm` | Z.ai GLM: flagship first, all models |
+| `combo/deepseek` | DeepSeek Web: v4-pro → v4-flash → R1 |
+| `combo/lmarena` | Arena: all thinking levels |
+| `combo/lmarena-fast` | Arena: low/medium thinking only (fast) |
+| `combo/lmarena-slow` | Arena: high/xhigh thinking only (smart) |
+| `combo/mimo` | MiMo open-source V2.5 across all providers |
+| `mistral/mistral-large-latest` | Direct Mistral, fastest route |
+
+### Top free alternatives to paid services
+
+| Instead of... | Use this | Why |
+|---|---|---|
+| ChatGPT Plus ($20/mo) | `chatgpt-web/*` via Cookie Pusher | Same models, your session |
+| Claude Pro ($20/mo) | `claude-web/*` via Cookie Pusher | Same models, your session |
+| Gemini Advanced ($20/mo) | `gemini-web/*` via Cookie Pusher | Same models, your session |
+| Cursor Pro ($20/mo) | `auto/coding:reliable` in VS Code | Free pool, any IDE |
+| GitHub Copilot ($10/mo) | `github-models/*` + `auto/coding:reliable` | Free models |
+| Perplexity Pro ($20/mo) | `auto/best-reasoning` + web search | Free reasoning models |
+| Midjourney ($10/mo) | `flowui/nano-banana-2` | Free via Google Flow |
+
+### More free tools and routes to try
+
+| Tool | Route | What you get |
+|---|---|---|
+| **t3.chat** | `t3-web/*` (23 routes) | Claude Opus 4, Sonnet 4, GPT-5.x — free via session |
+| **DuckDuckGo AI** | `ddgw/*` (6 routes) | Claude Haiku, GPT-5.4-mini — free, no account |
+| **Felo AI** | `felo/*` (5 routes) | Chat, search, scholar, document — free |
+| **OpenCode** | `opencode/*` (93 routes) | Full catalog via your OpenCode session |
+| **Cloudflare AI** | `cf/*` (13 routes) | Gemma, DeepSeek R1, Llama — free, no key |
+| **Chutes.ai** | `chutes/*` (13 routes) | Qwen3-235B, Nemotron — free tier |
+| **SambaNova** | `samba/*` (6 routes) | DeepSeek V3.2, Llama — free tier |
+| **xAI Grok** | `xai/*` (8 routes) | Grok models — needs API key |
+| **Veo (video)** | `veo-free/*` (2 routes) | Video generation — free |
+| **Image gen** | `flowui/imagen-4` | Google Imagen 4 — free via Flow |
+
 ## Troubleshooting
 
 - **`Connection refused` on 20128** — the gateway didn't start; check
@@ -611,3 +719,5 @@ a DNS route with your own domain for a permanent URL.
   sign in, hit "Grab & push sessions" again.
 - **"open tab needed"** — Qwen/DeepSeek/Kimi/Hailuo/t3.chat keep tokens in
   localStorage; keep that site's tab open and click again.
+- **Routes are slow (27s+)** — the resilience settings may have reset; run
+  `fix-model-cache.ps1` to re-apply the optimized timeout budget.
