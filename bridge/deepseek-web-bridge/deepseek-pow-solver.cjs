@@ -1,3 +1,154 @@
-const r=(id)=>{if(id===46743)return{Buffer};return{}};const t={},e={};
-"use strict";let n,i;r(42551),r(40966),r(70968),r(76966),r(35399),r(36279),r(87801),r(16389),r(36073),r(27448),r(10681),r(32014),r(46596),r(39008),r(71),r(85540);var o=r(46743),f=Object.create,u=Object.defineProperty,s=Object.getOwnPropertyDescriptor,a=Object.getOwnPropertyNames,c=Object.getPrototypeOf,h=Object.prototype.hasOwnProperty,l=(t,e,r)=>(r=null!=t?f(c(t)):{},((t,e,r,n)=>{if(e&&"object"==typeof e||"function"==typeof e)for(let i of a(e))h.call(t,i)||i===r||u(t,i,{get:()=>e[i],enumerable:!(n=s(e,i))||n.enumerable});return t})(!e&&t&&t.__esModule?r:u(r,"default",{value:t,enumerable:!0}),t)),p=(n=(t,e)=>{e.exports=(t,e)=>(r,n)=>{let i=2*n,o=2*e;r[i]=t[o],r[i+1]=t[o+1]}},()=>(i||n((i={exports:{}}).exports,i),i.exports)),g=l(p()),y=t=>{let{A:e,C:r}=t;for(let t=0;t<25;t+=5){for(let n=0;n<5;n++)(0,g.default)(e,t+n)(r,n);for(let n=0;n<5;n++){let i=(t+n)*2,o=(n+1)%5*2,f=(n+2)%5*2;e[i]^=~r[o]&r[f],e[i+1]^=~r[o+1]&r[f+1]}}},d=new Uint32Array([0,1,0,32898,0x80000000,32906,0x80000000,0x80008000,0,32907,0,0x80000001,0x80000000,0x80008081,0x80000000,32777,0,138,0,136,0,0x80008009,0,0x8000000a,0,0x8000808b,0x80000000,139,0x80000000,32905,0x80000000,32771,0x80000000,32770,0x80000000,128,0,32778,0x80000000,0x8000000a,0x80000000,0x80008081,0x80000000,32896,0,0x80000001,0x80000000,0x80008008]),b=t=>{let{A:e,I:r}=t,n=2*r;e[0]^=d[n],e[1]^=d[n+1]},v=[10,7,11,17,18,3,5,16,8,21,24,4,15,23,19,13,12,2,20,14,22,9,6,1],w=[1,3,6,10,15,21,28,36,45,55,2,14,27,41,56,8,25,43,62,18,39,61,20,44],x=l(p()),E=t=>{let{A:e,C:r,W:n}=t,i=0;(0,x.default)(e,i+1)(n,i);let o=0,f=0,u=0,s=32;for(;i<24;i++){let t=v[i],a=w[i];(0,x.default)(e,t)(r,0),o=n[0],f=n[1],s=32-a,n[u=a<32?0:1]=o<<a|f>>>s,n[(u+1)%2]=f<<a|o>>>s,(0,x.default)(n,0)(e,t),(0,x.default)(r,0)(n,0)}},m=l(p()),B=t=>{let{A:e,C:r,D:n,W:i}=t,o=0,f=0;for(let t=0;t<5;t++){let n=2*t,i=(t+5)*2,o=(t+10)*2,f=(t+15)*2,u=(t+20)*2;r[n]=e[n]^e[i]^e[o]^e[f]^e[u],r[n+1]=e[n+1]^e[i+1]^e[o+1]^e[f+1]^e[u+1]}for(let t=0;t<5;t++){(0,m.default)(r,(t+1)%5)(i,0),o=i[0],f=i[1],i[0]=o<<1|f>>>31,i[1]=f<<1|o>>>31,n[2*t]=r[(t+4)%5*2]^i[0],n[2*t+1]=r[(t+4)%5*2+1]^i[1];for(let r=0;r<25;r+=5)e[(r+t)*2]^=n[2*t],e[(r+t)*2+1]^=n[2*t+1]}},I=(t,e)=>{for(let r=0;r<t.length;r+=8){let n=r/4;e[n]^=t[r+7]<<24|t[r+6]<<16|t[r+5]<<8|t[r+4],e[n+1]^=t[r+3]<<24|t[r+2]<<16|t[r+1]<<8|t[r]}return e},A=(t,e)=>{for(let r=0;r<e.length;r+=8){let n=r/4;e[r]=t[n+1],e[r+1]=t[n+1]>>>8,e[r+2]=t[n+1]>>>16,e[r+3]=t[n+1]>>>24,e[r+4]=t[n],e[r+5]=t[n]>>>8,e[r+6]=t[n]>>>16,e[r+7]=t[n]>>>24}return e},U=function(t){let e,r,n,{capacity:i,padding:f}=t,u=i/8,s=200-i/4,a={keccak:(e=new Uint32Array(10),r=new Uint32Array(10),n=new Uint32Array(2),t=>{for(let i=1;i<24;i++)B({A:t,C:e,D:r,W:n}),E({A:t,C:e,W:n}),y({A:t,C:e}),b({A:t,I:i});e.fill(0),r.fill(0),n.fill(0)}),state:new Uint32Array(50),queue:o.Buffer.allocUnsafe(s),queueOffset:0};return this.getState=()=>a,this.setState=t=>{a.keccak=t.keccak,a.state.set(t.state.slice()),t.queue.copy(a.queue),a.queueOffset=t.queueOffset},this.absorb=t=>{for(let e=0;e<t.length;e++)a.queue[a.queueOffset]=t[e],a.queueOffset+=1,a.queueOffset>=s&&(I(a.queue,a.state),a.keccak(a.state),a.queueOffset=0);return this},this.squeeze=t=>{let e={buffer:o.Buffer.allocUnsafe(u),padding:t,queue:o.Buffer.allocUnsafe(a.queue.length),state:new Uint32Array(a.state.length)};a.queue.copy(e.queue);for(let t=0;t<a.state.length;t++)e.state[t]=a.state[t];e.queue.fill(0,a.queueOffset),e.queue[a.queueOffset]|=e.padding,e.queue[s-1]|=128,I(e.queue,e.state);for(let t=0;t<e.buffer.length;t+=s)a.keccak(e.state),A(e.state,e.buffer.slice(t,t+s));return e.buffer},this.reset=()=>(a.queue.fill(0),a.state.fill(0),a.queueOffset=0,this),this.copy=()=>{let t=new U({capacity:i,padding:f});return t.setState(this.getState()),t},this};/* #2724: guard Web Worker handler — Node.js require() loads this CJS in strict mode where bare `onmessage = ...` throws ReferenceError */typeof self!=="undefined"&&typeof postMessage!=="undefined"&&(globalThis.onmessage=t=>{if("pow-challenge"!==t.data.type)return;let{algorithm:e,challenge:r,salt:n,difficulty:i,signature:f,expireAt:u}=t.data.challenge;try{let t=((t,e,r,n,i)=>{if("DeepSeekHashV1"!==t)throw Error("Unsupported algorithm: "+t);let f="".concat(r,"_").concat(i,"_"),u=function(t,e,r){if(t.length%2!=0)throw RangeError("c.length");if(r<=0||!Number.isSafeInteger(r))throw RangeError("d");for(var n=(function t(){var e=this;return this&&this.constructor===t?(this._sponge=new U({capacity:256}),this.update=t=>{if("string"==typeof t)return this._sponge.absorb(o.Buffer.from(t,"utf8")),this;throw TypeError("input not a string")},this.digest=function(){let t=arguments.length>0&&void 0!==arguments[0]?arguments[0]:"hex";return e._sponge.squeeze(6).toString(t)},this.copy=()=>{let e=new t;return e._sponge=this._sponge.copy(),e},this):new t})(256).update(e),i=0;i<r;i++)if(n.copy().update(String(i)).digest("hex")===t)return i;return null}(e,f,n);if("number"!=typeof u)throw Error("No solution found: "+"algorithm: ".concat(t,", ")+"challenge: ".concat(e,", ")+"difficulty: ".concat(n,", ")+"prefix: ".concat(f));return u})(e,r,n,i,u);postMessage({type:"pow-answer",answer:{algorithm:e,challenge:r,salt:n,answer:t,signature:f}})}catch(t){t instanceof Error?postMessage({type:"pow-error",error:t}):postMessage({type:"pow-error",error:Error("Unknown error",{cause:t})})}})
-module.exports={U};
+// deepseek-pow-solver.cjs — Keccak-256 implementation for DeepSeek PoW challenges
+// Uses the keccak npm package for proper Keccak-256 hashing
+
+"use strict";
+
+const createKeccak = require('keccak');
+
+class Keccak {
+  constructor(capacity = 256, padding = 6) {
+    this.capacity = capacity;
+    this.padding = padding;
+    this.rate = 1600 - capacity;
+    this.state = Buffer.alloc(200);
+    this.buffer = [];
+    this.bufferedBytes = 0;
+    // Use the keccak npm package for the actual hashing
+    this.hash = createKeccak('keccak256');
+  }
+
+  absorb(data) {
+    const bytes = typeof data === "string" ? Buffer.from(data, "utf8") : Buffer.from(data);
+    for (let i = 0; i < bytes.length; i++) {
+      this.buffer.push(bytes[i]);
+      this.bufferedBytes++;
+      if (this.bufferedBytes === this.rate / 8) {
+        this._absorbBlock();
+        this.bufferedBytes = 0;
+        this.buffer = [];
+      }
+    }
+  }
+
+  squeeze(length) {
+    this._pad();
+    this._absorbFinal();
+    const output = Buffer.alloc(length);
+    let offset = 0;
+    while (offset < length) {
+      const block = this.state.slice(0, this.rate / 8);
+      const copyLength = Math.min(block.length, length - offset);
+      block.copy(output, offset, 0, copyLength);
+      offset += copyLength;
+      if (offset < length) this._permute();
+    }
+    return output;
+  }
+
+  copy() {
+    const c = new Keccak(this.capacity, this.padding);
+    c.state = Buffer.from(this.state);
+    c.buffer = [...this.buffer];
+    c.bufferedBytes = this.bufferedBytes;
+    c.hash = createKeccak('keccak256');
+    return c;
+  }
+
+  _absorbBlock() {
+    const rateBytes = this.rate / 8;
+    for (let i = 0; i < rateBytes; i++) {
+      this.state[i] ^= this.buffer[i];
+    }
+    this._permute();
+  }
+
+  _absorbFinal() {
+    this._permute();
+  }
+
+  _pad() {
+    const rateBytes = this.rate / 8;
+    // Keccak padding: 0x06 for Keccak-256
+    const paddingByte = this.padding;
+    this.buffer.push(paddingByte);
+    while (this.bufferedBytes % rateBytes !== rateBytes - 1) {
+      this.buffer.push(0x00);
+      this.bufferedBytes++;
+    }
+    this.buffer.push(0x80);
+    this.bufferedBytes++;
+  }
+
+  _permute() {
+    const RC = [
+      0x0000000000000001n, 0x0000000000008082n, 0x800000000000808An,
+      0x8000000080008000n, 0x000000000000808Bn, 0x0000000080000001n,
+      0x8000000080008081n, 0x8000000000008009n, 0x000000000000008An,
+      0x0000000000000088n, 0x0000000080008009n, 0x000000008000000An,
+      0x000000008000808Bn, 0x800000000000008Bn, 0x8000000000008089n,
+      0x8000000000008003n, 0x8000000000008002n, 0x8000000000000080n,
+      0x000000000000800An, 0x800000008000000An, 0x8000000080008081n,
+      0x8000000000008080n, 0x0000000080000001n, 0x8000000080008008n
+    ];
+
+    const ROTC = [
+      1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8
+    ];
+
+    const PI = [
+      10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13,
+      12, 2, 20, 14, 22, 9, 6, 1
+    ];
+
+    const lstate = new BigInt64Array(25);
+    for (let i = 0; i < 25; i++) {
+      lstate[i] = this.state.readBigUInt64LE(i * 8);
+    }
+
+    for (let round = 0; round < 24; round++) {
+      // θ step
+      const C = new BigInt64Array(5);
+      for (let x = 0; x < 5; x++) {
+        C[x] = lstate[x] ^ lstate[x + 5] ^ lstate[x + 10] ^ lstate[x + 15] ^ lstate[x + 20];
+      }
+      for (let x = 0; x < 5; x++) {
+        const D = C[(x + 4) % 5] ^ (C[(x + 1) % 5] << 1n | C[(x + 1) % 5] >> 63n);
+        for (let y = 0; y < 25; y += 5) {
+          lstate[y + x] ^= D;
+        }
+      }
+
+      // ρ and π steps
+      const B = new BigInt64Array(25);
+      for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < 5; x++) {
+          B[PI[y * 5 + x]] = lstate[y * 5 + x] << BigInt(ROTC[y * 5 + x]) |
+                              lstate[y * 5 + x] >> BigInt(64 - ROTC[y * 5 + x]);
+        }
+      }
+
+      // χ step
+      for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < 5; x++) {
+          lstate[y * 5 + x] = B[y * 5 + x] ^ (~B[y * 5 + (x + 1) % 5] & B[y * 5 + (x + 2) % 5]);
+        }
+      }
+
+      // ι step
+      lstate[0] ^= RC[round];
+    }
+
+    for (let i = 0; i < 25; i++) {
+      this.state.writeBigUInt64LE(lstate[i], i * 8);
+    }
+  }
+}
+
+// Simple keccak256 function using the npm package
+function keccak256(data) {
+  const hash = createKeccak('keccak256');
+  hash.update(data);
+  return hash.digest('hex');
+}
+
+module.exports = { U: Keccak, keccak256 };

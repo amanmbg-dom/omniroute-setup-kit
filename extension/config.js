@@ -11,4 +11,6 @@ export const DEFAULT_API_KEY = '';
 // gateway connection.
 //   mimo-web-bridge   (20135) — Xiaomi MiMo AI Studio
 //   meta-web-bridge    (20136) — Meta AI (Llama models)
+//   gemini-chat-bridge (20138) — Google Gemini Chat
 export const BRIDGE_URL = 'http://127.0.0.1:20135';
+export const GEMINI_CHAT_BRIDGE_URL = 'http://127.0.0.1:20138';

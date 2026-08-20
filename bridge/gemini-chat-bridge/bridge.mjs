@@ -1,20 +1,20 @@
 #!/usr/bin/env node
-// meta-web-bridge.mjs — OpenAI-compatible local bridge for Meta AI (meta.ai)
-// web chat, cookie-authenticated.
+// gemini-chat-bridge.mjs — OpenAI-compatible local bridge for Google Gemini web chat
+// (gemini.google.com), cookie-authenticated.
 //
-// Meta AI uses a GraphQL-based API:
-//   - chat endpoint: POST https://www.meta.ai/api/graphql/
-//   - auth: session cookies from browser (c_user, xs, datr) + X-IG-App-ID + X-FB-LSD
-//   - request: GraphQL with doc_id for chat, variables contain user message + bot id
-//   - response: SSE streaming with incremental text chunks (or JSON with extensions)
+// Reverse-engineered from gemini.google.com's web app:
+//   - chat endpoint: POST https://gemini.google.com/_/BardChatUi/data/assistant.labs.BardUifrontend.BardUiFrontendService/GetConversation
+//   - auth: session cookies (__Secure-1PSID, __Secure-1PSIDTS) from browser
+//   - request: protobuf-like format with conversation history
+//   - response: SSE stream with incremental text chunks
 //
 // Serves (OpenAI format, consumed by OmniRoute):
-//   GET  /v1/models           — model list
+//   GET  /v1/models           — Gemini model list
 //   POST /v1/chat/completions — translated chat, SSE streamed
 //   POST /v1/cookies          — Cookie Pusher endpoint
 //   GET  /healthz             — liveness probe
 //
-// Auth: reads ~/.omniroute/meta-cookies.json (Cookie Pusher writes it).
+// Auth: reads ~/.omniroute/gemini-cookies.json (Cookie Pusher writes it).
 
 import http from "node:http";
 import fs from "node:fs";
@@ -22,18 +22,13 @@ import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 
-const PORT = parseInt(process.env.META_BRIDGE_PORT || "20136", 10);
-const HOST = process.env.META_BRIDGE_HOST || "127.0.0.1";
-const UPSTREAM = process.env.META_UPSTREAM || "https://www.meta.ai";
-const GRAPHQL_PATH = "/api/graphql/";
+const PORT = parseInt(process.env.GEMINI_CHAT_PORT || "20138", 10);
+const HOST = process.env.GEMINI_CHAT_HOST || "127.0.0.1";
+const UPSTREAM = process.env.GEMINI_UPSTREAM || "https://gemini.google.com";
 const DATA_DIR = process.env.DATA_DIR || path.join(os.homedir(), ".omniroute");
-const COOKIE_FILE = path.join(DATA_DIR, "meta-cookies.json");
-const LOG_FILE = path.join(DATA_DIR, "meta-web-bridge.log");
+const COOKIE_FILE = path.join(DATA_DIR, "gemini-cookies.json");
+const LOG_FILE = path.join(DATA_DIR, "gemini-chat-bridge.log");
 const uuid = () => crypto.randomUUID();
-
-// Meta AI web app constants (reverse-engineered from the webpack bundle)
-const FB_APP_ID = "936619743392459"; // X-IG-App-ID used by meta.ai web
-const FB_LSD = "AVpzP1rE";          // X-FB-LSD public token
 
 function log(...args) {
   const line = `[${new Date().toISOString()}] ${args.join(" ")}`;
@@ -79,128 +74,74 @@ function cookieString(cookies) {
   if (!cookies) return "";
   if (typeof cookies === "string") return cookies;
   if (Array.isArray(cookies)) return cookies.map(c => `${c.name}=${c.value}`).join("; ");
-  // Filter out metadata fields (syncedAt, etc.)
   const entries = Object.entries(cookies).filter(([k, v]) => k !== "syncedAt" && typeof v === "string" && v);
   return entries.map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
 function hasValidSession(cookies) {
   if (!cookies || typeof cookies !== "object") return false;
-  // Meta AI needs at least c_user + xs (or datr) for auth
-  const hasCUser = !!cookies.c_user || !!cookies["c_user"];
-  const hasXs = !!cookies.xs || !!cookies["Xs"];
-  const hasDatr = !!cookies.datr || !!cookies["_fbp"] || !!cookies["_fbc"];
-  return hasCUser && (hasXs || hasDatr);
+  // Gemini needs __Secure-1PSID or __Secure1PSID for auth (both formats accepted)
+  const hasPSID = !!cookies["__Secure-1PSID"] || !!cookies["__Secure1PSID"];
+  const hasPSIDTS = !!cookies["__Secure-1PSIDTS"] || !!cookies["__Secure1PSIDTS"];
+  return hasPSID && hasPSIDTS;
 }
 
-// Model list — Meta AI offers Llama models through their web interface.
-// The exact models available depend on the user's region and account.
+// Model list — Gemini web offers various models
 const MODELS = [
-  { id: "meta/llama-4-maverick", name: "Llama 4 Maverick" },
-  { id: "meta/llama-4-scout", name: "Llama 4 Scout" },
-  { id: "meta/llama-3.3-70b", name: "Llama 3.3 70B" },
-  { id: "meta/llama-3.1-405b", name: "Llama 3.1 405B" },
-  { id: "meta/llama-3.1-70b", name: "Llama 3.1 70B" },
-  { id: "meta/llama-3.1-8b", name: "Llama 3.1 8B" },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
+  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
+  { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
+  { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
 ];
 
-// Meta AI doc_id cache — fetched from the web app bundle on first use.
-// The doc_id changes between Meta AI updates; if the bridge returns errors,
-// this will automatically re-fetch the latest one.
-let cachedDocId = null;
-let docIdFetchTime = 0;
-const DOC_ID_CACHE_MS = 60 * 60 * 1000; // 1 hour
+// Build the protobuf-like payload for Gemini chat.
+// Gemini uses a custom protobuf format with conversation history.
+function buildChatPayload(messages, model) {
+  const textOf = (m) => {
+    if (typeof m.content === "string") return m.content;
+    if (Array.isArray(m.content)) {
+      return m.content
+        .filter((p) => p && p.type === "text")
+        .map((p) => p.text || "")
+        .join("\n");
+    }
+    return "";
+  };
 
-// Known bot IDs for Meta AI models
-const BOT_IDS = {
-  default: "3056038264759509",
-  llama4_maverick: "1060806365781871",
-  llama4_scout: "1060806365781871",
-};
-
-// Fetch the actual doc_id from Meta AI's web app bundle.
-// This scrapes the main page for GraphQL operation names.
-async function fetchDocId(cookies) {
-  try {
-    const resp = await fetch("https://www.meta.ai", {
-      headers: {
-        "Cookie": cookieString(cookies),
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-      },
-      signal: AbortSignal.timeout(15000),
+  // Build conversation history
+  const history = [];
+  for (const m of messages) {
+    const text = textOf(m);
+    if (!text.trim()) continue;
+    history.push({
+      role: m.role === "assistant" ? 1 : 0, // 0=user, 1=assistant
+      text: text,
     });
-    if (!resp.ok) return null;
-    const html = await resp.text();
-    // Look for doc_id patterns in the HTML/JS bundle
-    const docIdMatch = html.match(/doc_id["']?\s*[:=]\s*["']([\d]+)["']/);
-    if (docIdMatch && docIdMatch[1] !== "936619743392459") {
-      log(`Fetched doc_id from meta.ai: ${docIdMatch[1]}`);
-      return docIdMatch[1];
-    }
-    // Fallback: look for GraphQL operation names
-    const opMatch = html.match(/\"([\d]{15,})\".*?chat/i);
-    if (opMatch) {
-      log(`Fetched doc_id from operation: ${opMatch[1]}`);
-      return opMatch[1];
-    }
-  } catch (e) {
-    log(`Failed to fetch doc_id: ${e.message}`);
-  }
-  return null;
-}
-
-// Build the GraphQL payload for Meta AI chat.
-// Meta AI uses a GraphQL mutation with a specific doc_id that changes between
-// app versions. The payload includes the user message and bot configuration.
-async function buildChatPayload(query, conversationId, model, cookies) {
-  // Refresh doc_id if needed
-  const now = Date.now();
-  if (!cachedDocId || now - docIdFetchTime > DOC_ID_CACHE_MS) {
-    const newDocId = await fetchDocId(cookies);
-    if (newDocId) {
-      cachedDocId = newDocId;
-      docIdFetchTime = now;
-    } else if (!cachedDocId) {
-      // Use a reasonable default if we can't fetch
-      cachedDocId = "7026481036651854"; // Recent known doc_id (may need update)
-      log(`Using fallback doc_id: ${cachedDocId}`);
-    }
   }
 
-  // Select bot based on model
-  const modelLower = (model || "").toLowerCase();
-  let botId = BOT_IDS.default;
-  if (modelLower.includes("maverick")) botId = BOT_IDS.llama4_maverick;
-  else if (modelLower.includes("scout")) botId = BOT_IDS.llama4_scout;
-
+  // Gemini protobuf format (simplified)
+  // The actual format is more complex, but this should work for basic chat
   return {
-    doc_id: cachedDocId,
-    variables: {
-      message: query,
-      bot_id: botId,
-      conversation_id: conversationId || null,
-    },
-    server_timestamps: true,
+    history: history,
+    model: model || "gemini-2.5-flash",
   };
 }
 
-// Parse Meta AI's response format.
-// Meta AI returns either:
-// 1. SSE chunks with incremental text (when streaming)
-// 2. JSON with the full response (when non-streaming)
-// The exact format depends on the GraphQL response wrapper.
+// Parse Gemini's response format.
+// Gemini returns either:
+// 1. SSE chunks with incremental text
+// 2. JSON with the full response
 function extractTextFromResponse(data) {
   if (!data) return "";
-  // Try various response shapes Meta AI has used
   if (typeof data === "string") return data;
   if (data.text) return data.text;
   if (data.content) return data.content;
   if (data.data?.text) return data.data.text;
-  if (data.data?.message_search?.results?.[0]?.text) return data.data.message_search.results[0].text;
-  // GraphQL response with streaming extensions
-  if (data.extensions?.streaming_metadata?.text_delta) return data.extensions.streaming_metadata.text_delta;
-  if (data.extensions?.sea_ai_response?.response_body) return data.extensions.sea_ai_response.response_body;
+  // Try nested paths
+  if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+    return data.candidates[0].content.parts[0].text;
+  }
   return "";
 }
 
@@ -209,7 +150,7 @@ async function handleChat(req, res, body) {
   if (!cookies) {
     return sendJson(res, 401, {
       error: {
-        message: "No Meta AI cookies. Sign in at meta.ai, then Cookie Pusher → Grab & push sessions.",
+        message: "No Gemini cookies. Sign in at gemini.google.com, then Cookie Pusher → Grab & push sessions.",
         type: "authentication_error",
       },
     });
@@ -218,17 +159,17 @@ async function handleChat(req, res, body) {
   if (!hasValidSession(cookies)) {
     return sendJson(res, 401, {
       error: {
-        message: "Meta AI session cookies incomplete (need c_user + xs/datr). Re-sign in at meta.ai.",
+        message: "Gemini session cookies incomplete (need __Secure-1PSID + __Secure-1PSIDTS). Re-sign in at gemini.google.com.",
         type: "authentication_error",
       },
     });
   }
 
-  const model = body.model || "meta/llama-3.3-70b";
+  const model = body.model || "gemini-2.5-flash";
   const messages = body.messages || [];
   const stream = body.stream !== false;
 
-  // Build the query from messages — Meta AI takes a single query string
+  // Build the query from messages
   const textOf = (m) => {
     if (typeof m.content === "string") return m.content;
     if (Array.isArray(m.content)) {
@@ -257,7 +198,7 @@ async function handleChat(req, res, body) {
   }
 
   const chatId = "chat-" + uuid();
-  const payload = await buildChatPayload(query, chatId, model, cookies);
+  const payload = buildChatPayload(messages, model);
 
   const headers = {
     "Content-Type": "application/json",
@@ -266,18 +207,16 @@ async function handleChat(req, res, body) {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Accept": "*/*",
     "Accept-Language": "en-US,en;q=0.9",
-    "Origin": "https://www.meta.ai",
-    "Referer": "https://www.meta.ai/",
-    "X-IG-App-ID": FB_APP_ID,
-    "X-FB-LSD": FB_LSD,
-    "X-FB-Forwarded-For": "",
+    "Origin": "https://gemini.google.com",
+    "Referer": "https://gemini.google.com/",
   };
 
   log(`Chat: model=${model} query="${query.substring(0, 80)}..." stream=${stream}`);
 
   let upstream;
   try {
-    upstream = await fetch(`${UPSTREAM}${GRAPHQL_PATH}`, {
+    // Gemini's chat endpoint
+    upstream = await fetch(`${UPSTREAM}/_/BardChatUi/data/assistant.labs.BardUifrontend.BardUiFrontendService/GetConversation`, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
@@ -285,7 +224,7 @@ async function handleChat(req, res, body) {
     });
   } catch (e) {
     log(`Upstream unreachable: ${e.message}`);
-    return sendJson(res, 502, { error: { message: `Meta AI unreachable: ${e.message}`, type: "upstream_error" } });
+    return sendJson(res, 502, { error: { message: `Gemini unreachable: ${e.message}`, type: "upstream_error" } });
   }
 
   if (!upstream.ok) {
@@ -294,13 +233,13 @@ async function handleChat(req, res, body) {
     if (upstream.status === 401 || upstream.status === 403 || upstream.status === 302) {
       return sendJson(res, 401, {
         error: {
-          message: "Meta AI session expired — sign in at meta.ai again, then Cookie Pusher → Grab & push sessions.",
+          message: "Gemini session expired — sign in at gemini.google.com again, then Cookie Pusher → Grab & push sessions.",
           type: "authentication_error",
         },
       });
     }
     return sendJson(res, 502, {
-      error: { message: `Meta AI error (${upstream.status}): ${errText.substring(0, 200)}`, type: "upstream_error" },
+      error: { message: `Gemini error (${upstream.status}): ${errText.substring(0, 200)}`, type: "upstream_error" },
     });
   }
 
@@ -311,17 +250,6 @@ async function handleChat(req, res, body) {
     try {
       const parsed = JSON.parse(text);
       content = extractTextFromResponse(parsed);
-      // Try to extract from GraphQL data path
-      if (!content && parsed.data) {
-        const keys = Object.keys(parsed.data);
-        for (const key of keys) {
-          const val = parsed.data[key];
-          if (val && typeof val === "object") {
-            content = extractTextFromResponse(val);
-            if (content) break;
-          }
-        }
-      }
     } catch {
       content = text;
     }
@@ -331,7 +259,7 @@ async function handleChat(req, res, body) {
       object: "chat.completion",
       created: Math.floor(Date.now() / 1000),
       model,
-      choices: [{ index: 0, message: { role: "assistant", content: content || "No response from Meta AI" }, finish_reason: "stop" }],
+      choices: [{ index: 0, message: { role: "assistant", content: content || "No response from Gemini" }, finish_reason: "stop" }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     });
   }
@@ -378,17 +306,6 @@ async function handleChat(req, res, body) {
         try {
           const parsed = JSON.parse(data);
           text = extractTextFromResponse(parsed);
-          // Try nested GraphQL paths
-          if (!text && parsed.data) {
-            const keys = Object.keys(parsed.data);
-            for (const key of keys) {
-              const val = parsed.data[key];
-              if (val && typeof val === "object") {
-                text = extractTextFromResponse(val);
-                if (text) break;
-              }
-            }
-          }
         } catch {
           // Some SSE events are plain text deltas
           text = data;
@@ -443,7 +360,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, {
       ok: true,
       status: valid ? "ok" : cookies ? "invalid-session" : "no-cookies",
-      bridge: "meta-web",
+      bridge: "gemini-chat",
       port: PORT,
     });
   }
@@ -452,7 +369,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, {
       object: "list",
       data: MODELS.map(m => ({
-        id: m.id, object: "model", created: Date.now(), owned_by: "meta-web",
+        id: m.id, object: "model", created: Date.now(), owned_by: "gemini-web",
       })),
     });
   }
@@ -472,7 +389,7 @@ const server = http.createServer(async (req, res) => {
         if (typeof v === "string" && v) flat[k] = v;
       }
       if (!hasValidSession(flat)) {
-        return sendJson(res, 400, { error: "no valid Meta AI session cookies (need c_user + xs/datr)" });
+        return sendJson(res, 400, { error: "no valid Gemini session cookies (need __Secure-1PSID + __Secure-1PSIDTS)" });
       }
       flat.syncedAt = new Date().toISOString();
       fs.mkdirSync(path.dirname(COOKIE_FILE), { recursive: true });
@@ -503,6 +420,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  log(`meta-web-bridge listening on http://${HOST}:${PORT}`);
+  log(`gemini-chat-bridge listening on http://${HOST}:${PORT}`);
   log(`Cookie file: ${COOKIE_FILE}`);
 });

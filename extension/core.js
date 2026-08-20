@@ -1,7 +1,7 @@
 // OmniRoute Cookie Pusher — shared core (ES module).
 // Used by both the popup (manual grab) and the background service worker
 // (scheduled + expiry-driven auto-refresh).
-import { DEFAULT_URL, DEFAULT_API_KEY, BRIDGE_URL } from './config.js';
+import { DEFAULT_URL, DEFAULT_API_KEY, BRIDGE_URL, GEMINI_CHAT_BRIDGE_URL } from './config.js';
 
 export const DEFAULTS = { url: DEFAULT_URL, apiKey: DEFAULT_API_KEY };
 
@@ -16,6 +16,7 @@ export const BRIDGES = {
   'aistudio.xiaomimimo.com': { url: BRIDGE_URL || 'http://127.0.0.1:20135', path: '/v1/cookies' },
   'meta.ai': { url: 'http://127.0.0.1:20136', path: '/v1/cookies' },
   'chat.deepseek.com': { url: 'http://127.0.0.1:20137', path: '/v1/cookies', tokenKey: 'userToken' },
+  'google.com': { url: GEMINI_CHAT_BRIDGE_URL || 'http://127.0.0.1:20138', path: '/v1/cookies' },
 };
 
 // Provider catalog — mirrors OmniRoute's WEB_COOKIE_PROVIDERS auth hints.
@@ -149,7 +150,11 @@ export async function grabCredential(cfg) {
   switch (cfg.mode) {
     case 'header': {
       const h = toHeader(cookies, null);
-      return h ? { found: true, apiKey: h, note: `${cookies.length} cookies` } : { found: false, reason: 'no-session' };
+      if (!h) return { found: false, reason: 'no-session' };
+      // Build cookies object for bridge push compatibility
+      const cookieObj = {};
+      for (const c of cookies) cookieObj[c.name] = c.value;
+      return { found: true, apiKey: h, cookies: cookieObj, note: `${cookies.length} cookies` };
     }
     case 'named': {
       if (cfg.bareValue) {
@@ -158,8 +163,13 @@ export async function grabCredential(cfg) {
       }
       const h = toHeader(cookies, cfg.names);
       if (!h) return { found: false, reason: 'no-session' };
+      // Build cookies object for bridge push compatibility
+      const cookieObj = {};
+      for (const c of cookies) {
+        if (cfg.names && cfg.names.includes(c.name)) cookieObj[c.name] = c.value;
+      }
       const missing = (cfg.required || []).filter((n) => !cookies.some((c) => c.name === n));
-      return { found: true, apiKey: h, note: missing.length ? `missing ${missing.join(', ')}` : 'ok' };
+      return { found: true, apiKey: h, cookies: cookieObj, note: missing.length ? `missing ${missing.join(', ')}` : 'ok' };
     }
     case 'ls': {
       const r = await readLocalStorage(cfg.domain, cfg.lsKey);
