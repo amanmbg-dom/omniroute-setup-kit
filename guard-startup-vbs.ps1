@@ -63,6 +63,7 @@ $entries = [ordered]@{
     'FlowUI-Bridge' = '\omniroute-setup-kit\bridge\flow-browser\start-flow-browser.cmd'
     'Gemini-Bridge' = '\omniroute-setup-kit\bridge\gemini-bridge\start-bridge.cmd'
     'MiMo-Bridge'   = '\.omniroute\bridge\mimo-web-bridge\start-bridge.cmd'
+    'Meta-Bridge'   = '\.omniroute\bridge\meta-web-bridge\start-bridge.cmd'
     'FixModelCache' = '\omniroute-setup-kit\fix-model-cache.cmd'
 }
 

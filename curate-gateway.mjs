@@ -50,32 +50,15 @@ async function main() {
     return;
   }
 
-  // Fetch the FULL live catalog (all routes, including non-curated). The
-  // gateway cold-starts slowly and occasionally wedges on /v1/models for 30s+,
-  // so retry with backoff instead of giving up on the first timeout - otherwise
-  // curation silently skips whenever the gateway was mid-restart.
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  // Fetch the FULL live catalog (all routes, including non-curated).
   let cat;
-  let lastErr = null;
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    try {
-      const res = await fetch(`${gw}/v1/models`, {
-        headers,
-        signal: AbortSignal.timeout(30000),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      cat = await res.json();
-      break;
-    } catch (e) {
-      lastErr = e;
-      if (attempt < 4) {
-        console.log(`  (catalog fetch attempt ${attempt} failed: ${e.message} - retrying in ${attempt * 5}s)`);
-        await new Promise((r) => setTimeout(r, attempt * 5000));
-      }
-    }
-  }
-  if (!cat) {
-    console.log(`  (could not fetch ${gw}/v1/models for curation after 4 attempts: ${lastErr?.message})`);
+  try {
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    cat = await (
+      await fetch(`${gw}/v1/models`, { headers, signal: AbortSignal.timeout(25000) })
+    ).json();
+  } catch (e) {
+    console.log(`  (could not fetch ${gw}/v1/models for curation: ${e.message})`);
     return;
   }
   const all = [...new Set((cat.data || []).map((m) => m.id))];

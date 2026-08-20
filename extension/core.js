@@ -6,14 +6,16 @@ import { DEFAULT_URL, DEFAULT_API_KEY, BRIDGE_URL } from './config.js';
 export const DEFAULTS = { url: DEFAULT_URL, apiKey: DEFAULT_API_KEY };
 
 // Local bridges that take credentials directly (no gateway connection needed):
-//   mimo-web-bridge  (20135) reads ~/.omniroute/mimo-cookies.json
-//   deepseek-web-bridge (20136) reads ~/.omniroute/deepseek-cookies.json
+//   mimo-web-bridge   (20135) reads ~/.omniroute/mimo-cookies.json
+//   meta-web-bridge    (20136) reads ~/.omniroute/meta-cookies.json
+//   deepseek-web-bridge (20137) reads ~/.omniroute/deepseek-cookies.json
 // tokenKey: when set, the credential is pushed as { [tokenKey]: apiKey } instead
 // of { cookies } — the deepseek bridge wants the localStorage userToken.
 export const BRIDGES = {
   // domain -> { url, path, tokenKey? }
   'aistudio.xiaomimimo.com': { url: BRIDGE_URL || 'http://127.0.0.1:20135', path: '/v1/cookies' },
-  'chat.deepseek.com': { url: 'http://127.0.0.1:20136', path: '/v1/cookies', tokenKey: 'userToken' },
+  'meta.ai': { url: 'http://127.0.0.1:20136', path: '/v1/cookies' },
+  'chat.deepseek.com': { url: 'http://127.0.0.1:20137', path: '/v1/cookies', tokenKey: 'userToken' },
 };
 
 // Provider catalog — mirrors OmniRoute's WEB_COOKIE_PROVIDERS auth hints.
@@ -31,7 +33,7 @@ export const PROVIDERS = [
   { id: 'zai-web', label: 'Z.ai GLM', mode: 'header', domain: 'chat.z.ai', free: true },
   { id: 'yuanbao-web', label: 'Tencent Yuanbao', mode: 'header', domain: 'yuanbao.tencent.com', free: true },
   { id: 'lmarena', label: 'Arena', mode: 'header', domain: 'arena.ai', free: true },
-  { id: 'muse-spark-web', label: 'Meta AI Muse', mode: 'header', domain: 'meta.ai', free: true },
+  { id: 'muse-spark-web', label: 'Meta AI Muse', mode: 'cookies', domain: 'meta.ai', free: true },
   { id: 'zenmux-free', label: 'ZenMux', mode: 'header', domain: 'zenmux.ai', free: true },
   { id: 'qwen-web', label: 'Qwen Web', mode: 'ls+header', domain: 'chat.qwen.ai',
     lsKey: 'token', free: true },
@@ -40,7 +42,7 @@ export const PROVIDERS = [
 
   // ---- Subscription / optional (grabbed only if signed in) ----
   // deepseek-web pushes the userToken straight to the local deepseek-web-bridge
-  // (20136), which answers deepseek-web/* with auto-continue (no truncation).
+  // (20137), which answers deepseek-web/* with auto-continue (no truncation).
   { id: 'deepseek-web', label: 'DeepSeek Web', mode: 'ls', domain: 'chat.deepseek.com', lsKey: 'userToken' },
   { id: 'chatgpt-web', label: 'ChatGPT', mode: 'named', domain: 'chatgpt.com',
     names: ['__Secure-next-auth.session-token'], required: ['__Secure-next-auth.session-token'] },
@@ -55,7 +57,7 @@ export const PROVIDERS = [
   { id: 'kimi-web', label: 'Kimi', mode: 'ls-or-cookie', domain: 'kimi.com',
     lsKey: 'access_token', cookieName: 'kimi-auth', cookieValue: false },
   { id: 'hailuo-web', label: 'Hailuo (MiniMax)', mode: 'ls', domain: 'hailuo.ai', lsKey: '_token' },
-  { id: 'xiaomimimo-web', label: 'Xiaomi MiMo', mode: 'mimo', domain: 'aistudio.xiaomimimo.com', free: true },
+  { id: 'xiaomimimo-web', label: 'Xiaomi MiMo', mode: 'cookies', domain: 'aistudio.xiaomimimo.com', free: true },
   { id: 'doubao-web', label: 'Dola (ByteDance)', mode: 'header', domain: 'dola.com' },
   { id: 'copilot-web', label: 'Microsoft Copilot', mode: 'header', domain: 'copilot.microsoft.com' },
   { id: 'v0-vercel-web', label: 'v0 (Vercel)', mode: 'header', domain: 'v0.dev' },
@@ -184,15 +186,13 @@ export async function grabCredential(cfg) {
       }
       return r.needTab ? { found: false, reason: 'need-tab' } : { found: false, reason: 'no-session' };
     }
-    case 'mimo': {
-      // All cookies for aistudio.xiaomimimo.com (session + xiaomichatbot_ph) are
-      // pushed straight to the local mimo-web-bridge, which writes its own file.
+    case 'cookies': {
+      // All cookies for the domain are pushed straight to a local bridge
+      // (mimo-web-bridge, meta-web-bridge) which writes its own cookie file.
       if (!cookies.length) return { found: false, reason: 'no-session' };
-      const header = toHeader(cookies, null);
       const obj = {};
       for (const c of cookies) obj[c.name] = c.value;
-      if (!obj.session && !obj.SESSION) return { found: false, reason: 'no-session' };
-      return { found: true, apiKey: header, cookies: obj, note: `${cookies.length} cookies` };
+      return { found: true, apiKey: toHeader(cookies, null), cookies: obj, note: `${cookies.length} cookies` };
     }
   }
   return { found: false, reason: 'no-session' };
@@ -281,7 +281,7 @@ export async function runAll(settings) {
       const bridge = BRIDGES[cfg.domain];
       if (bridge) {
         // Cookie/token bridge: the session goes to the local bridge instead of a
-        // gateway connection (mimo-web-bridge, deepseek-web-bridge).
+        // gateway connection (mimo-web-bridge, meta-web-bridge, deepseek-web-bridge).
         const payload = bridge.tokenKey
           ? { [bridge.tokenKey]: cred.apiKey }
           : { cookies: cred.cookies };

@@ -72,8 +72,8 @@ anything.
    Termux:Boot once, set Battery → Unrestricted.
 
 That's it. The default install is already the **lean profile (~1.5GB)**: the
-gateway, the mimo-web bridge and the Cookie Pusher extension — every chat
-route (zai/qwen/deepseek/lmarena/mimo/gemini-web) works. The heavy extras are
+gateway, the mimo-web bridge, the meta-web bridge and the Cookie Pusher extension — every chat
+route (zai/qwen/deepseek/lmarena/mimo/meta/gemini-web) works. The heavy extras are
 opt-in:
 - `FULL=1 bash install-omniroute.sh` — everything, **~5-6GB** (adds Chromium
   ~1GB for Google Flow images + the gemini bridge build ~1.5GB, then strips

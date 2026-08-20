@@ -256,6 +256,7 @@ $bridges = @(
     @{ Name = 'flowui (flow-browser)';  Port = 20134; Path = '/';        Launchers = @((Join-Path $HOME 'omniroute-setup-kit\bridge\flow-browser\start-flow-browser.cmd'), (Join-Path $HOME '.omniroute\bridge\flow-browser\start-flow-browser.cmd')) },
     @{ Name = 'mimo-web';               Port = 20135; Path = '/healthz'; Launchers = @((Join-Path $HOME '.omniroute\bridge\mimo-web-bridge\start-bridge.cmd'), (Join-Path $HOME 'omniroute-setup-kit\bridge\mimo-web-bridge\start-bridge.cmd')) }
     @{ Name = 'meta-web';               Port = 20136; Path = '/healthz'; Launchers = @((Join-Path $HOME '.omniroute\bridge\meta-web-bridge\start-bridge.cmd'), (Join-Path $HOME 'omniroute-setup-kit\bridge\meta-web-bridge\start-bridge.cmd')) }
+    @{ Name = 'deepseek-web';            Port = 20137; Path = '/healthz'; Launchers = @((Join-Path $HOME '.omniroute\bridge\deepseek-web-bridge\start-bridge.cmd'), (Join-Path $HOME 'omniroute-setup-kit\bridge\deepseek-web-bridge\start-bridge.cmd')) }
 )
 foreach ($b in $bridges) {
     if (Test-Port $b.Port $b.Path) { continue }  # healthy - nothing to do

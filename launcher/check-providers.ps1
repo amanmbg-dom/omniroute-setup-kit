@@ -129,7 +129,7 @@ if (Test-Path $liveFile) {
 }
 $liveLines = @()
 $liveBad = @()
-$liveRoutes = @('combo/qwen', 'combo/glm', 'combo/deepseek', 'combo/lmarena', 'combo/mimo', 'combo/mimo-web', 'gemini-web/gemini-3.1-pro', 'chatgpt-web/gpt-5.6-pro', 'claude-web/claude-opus-5')
+$liveRoutes = @('combo/qwen', 'combo/glm', 'combo/deepseek', 'combo/lmarena', 'combo/mimo', 'combo/mimo-web', 'combo/meta-web', 'gemini-web/gemini-3.1-pro', 'chatgpt-web/gpt-5.6-pro', 'claude-web/claude-opus-5')
 if ($doLive) {
     foreach ($m in $liveRoutes) {
         $body = @{ model = $m; messages = @(@{ role = 'user'; content = 'Reply with exactly: PING' }); max_tokens = 8; stream = $false } | ConvertTo-Json -Depth 6
@@ -161,6 +161,8 @@ if ($doLive) {
 if (Test-Port 20133 '/health') { $lines += 'gemini bridge    OK    port 20133' } else { $lines += 'gemini bridge    BAD   port 20133 down - fix-model-cache.ps1/watchdog restarts it; re-run setup.ps1 if persistent'; $bad += 'gemini-bridge' }
 if (Test-Port 20134 '/')      { $lines += 'flowui bridge    OK    port 20134' } else { $lines += 'flowui bridge    BAD   port 20134 down - re-run setup.ps1 if persistent'; $bad += 'flowui-bridge' }
 if (Test-Port 20135 '/healthz') { $lines += 'mimo-web bridge  OK    port 20135' } else { $lines += 'mimo-web bridge  BAD   port 20135 down - watchdog restarts it; re-run setup.ps1 if persistent'; $bad += 'mimo-bridge' }
+if (Test-Port 20136 '/healthz') { $lines += 'meta-web bridge  OK    port 20136' } else { $lines += 'meta-web bridge  BAD   port 20136 down - watchdog restarts it; re-run setup.ps1 if persistent'; $bad += 'meta-bridge' }
+if (Test-Port 20137 '/healthz') { $lines += 'deepseek bridge  OK    port 20137' } else { $lines += 'deepseek bridge  BAD   port 20137 down - watchdog restarts it; re-run setup.ps1 if persistent'; $bad += 'deepseek-bridge' }
 
 $mimoCookie = Join-Path $HOME '.omniroute\mimo-cookies.json'
 if (Test-Path $mimoCookie) {

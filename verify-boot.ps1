@@ -22,14 +22,14 @@ try {
     $models = ($r.Content | ConvertFrom-Json).data
     $ids = $models | ForEach-Object { $_.id }
     Write-Host "  http:$($r.StatusCode) routes:$($ids.Count)"
-    foreach ($c in @('qwen','glm','deepseek','lmarena','lmarena-fast','lmarena-slow','mimo','mimo-web')) {
+    foreach ($c in @('qwen','glm','deepseek','lmarena','lmarena-fast','lmarena-slow','mimo','mimo-web','meta-web')) {
         if ($ids -contains $c) { Write-Host "  combo $c : PRESENT" } else { Write-Host "  combo $c : MISSING" }
     }
 } catch { Write-Host "  gateway NOT answering: $($_.Exception.Message)" }
 
 # 4. bridges health
 Write-Host "--- 4. bridges ---"
-foreach ($b in @(@{n='gflow';p=20133;path='/health'}, @{n='flowui';p=20134;path='/'}, @{n='mimo';p=20135;path='/healthz'})) {
+foreach ($b in @(@{n='gflow';p=20133;path='/health'}, @{n='flowui';p=20134;path='/'}, @{n='mimo';p=20135;path='/healthz'}, @{n='meta';p=20136;path='/healthz'}, @{n='deepseek';p=20137;path='/healthz'})) {
     try {
         $rr = Invoke-WebRequest -Uri "http://127.0.0.1:$($b.p)$($b.path)" -TimeoutSec 6 -UseBasicParsing
         Write-Host "  $($b.n) : http:$($rr.StatusCode)"

@@ -180,7 +180,7 @@ if ($bridgeUp) {
 # and the gateway's built-in executor truncates there. The bridge continues the
 # stream automatically (up to 8 rounds) so long chats complete. Token (userToken)
 # is pushed by Cookie Pusher -> Grab & push sessions.
-$dsBridgePort = 20136
+$dsBridgePort = 20137
 $dsBridgeUp = $false
 try {
     $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$dsBridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
@@ -222,6 +222,54 @@ if ($dsBridgeUp) {
     if ($dsRegisterScript) {
         & node $dsRegisterScript | Out-Null
         if ($LASTEXITCODE -eq 0) { Write-Host 'deepseek-web node + connection registered' -ForegroundColor DarkGray }
+    }
+}
+
+# ---- 1.5.7. ensure the Meta Web bridge is running + registered ----
+# meta-web is a local OpenAI-compatible bridge (bridge/meta-web-bridge/bridge.mjs)
+# that translates Meta AI's GraphQL chat API to OpenAI format. Your meta.ai
+# session cookies (c_user, xs, datr) are pushed by Cookie Pusher -> Grab &
+# push sessions, which POSTs them to the bridge's /v1/cookies endpoint.
+$metaBridgePort = 20136
+$metaBridgeUp = $false
+try {
+    $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$metaBridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
+    $metaBridgeUp = ($probe.StatusCode -eq 200)
+} catch { $metaBridgeUp = $false }
+if (-not $metaBridgeUp) {
+    $metaBridgeScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'bridge\meta-web-bridge\bridge.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\bridge\meta-web-bridge\bridge.mjs'),
+        (Join-Path $HOME '.omniroute\bridge\meta-web-bridge\bridge.mjs')
+    )) { if (Test-Path $cand) { $metaBridgeScript = $cand; break } }
+    if ($metaBridgeScript) {
+        $metaBridgeLog = Join-Path $HOME '.omniroute\meta-web-bridge.log'
+        Start-Process -FilePath 'node' -ArgumentList @($metaBridgeScript) -WindowStyle Hidden `
+            -RedirectStandardOutput $metaBridgeLog -RedirectStandardError "$metaBridgeLog.err"
+        Start-Sleep -Seconds 2
+        try {
+            $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$metaBridgePort/healthz" -TimeoutSec 3 -UseBasicParsing
+            $metaBridgeUp = ($probe.StatusCode -eq 200)
+        } catch { $metaBridgeUp = $false }
+        if ($metaBridgeUp) { Write-Host "Meta web bridge started ($metaBridgeScript)" -ForegroundColor Green }
+        else { Write-Host 'Meta web bridge NOT running (node missing?) - meta-web routes will not appear' -ForegroundColor Yellow }
+    } else {
+        Write-Host 'Meta web bridge script not found - meta-web routes skipped' -ForegroundColor Yellow
+    }
+} else {
+    Write-Host 'Meta web bridge already running' -ForegroundColor DarkGray
+}
+if ($metaBridgeUp) {
+    $metaRegisterScript = $null
+    foreach ($cand in @(
+        (Join-Path $PSScriptRoot 'bridge\meta-web-bridge\register-meta-web.mjs'),
+        (Join-Path $HOME 'omniroute-setup-kit\bridge\meta-web-bridge\register-meta-web.mjs'),
+        (Join-Path $HOME '.omniroute\bridge\meta-web-bridge\register-meta-web.mjs')
+    )) { if (Test-Path $cand) { $metaRegisterScript = $cand; break } }
+    if ($metaRegisterScript) {
+        & node $metaRegisterScript | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Host 'meta-web node + connection registered' -ForegroundColor DarkGray }
     }
 }
 
@@ -459,6 +507,19 @@ if ($bridgeUp) {
         $mimoWeb = @()
     }
 }
+# Meta WEB routes via the local meta-web bridge (meta.ai session cookie) -
+# probed straight from the bridge, not the gateway catalog.
+$metaWeb = @()
+if ($metaBridgeUp) {
+    try {
+        $metaModels = Invoke-RestMethod -Uri "http://127.0.0.1:$metaBridgePort/v1/models" -TimeoutSec 10
+        $metaWeb = @($metaModels.data | ForEach-Object { "meta-web/$($_.id)" } | Sort-Object)
+        Write-Host "meta-web routes from bridge: $($metaWeb.Count)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "meta-web bridge model probe failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        $metaWeb = @()
+    }
+}
 # Cookie/web providers (qwen-web, zai-web, lmarena, deepseek-web) - chat-capable
 # routes only. These were fixed 2026-08-14/15: qwen-web (real bx-umidtoken + ls+header
 # cookie, chat reuse), zai-web (SPA X-Signature + Aliyun traceless captcha worker) and
@@ -512,6 +573,8 @@ $comboFamilies = [ordered]@{
     # MiMo WEB (aistudio.xiaomimimo.com session) - flagship-first across the live
     # bridge models, best-first (v2.5-pro, v2.5, v2-flash, ...).
     'mimo-web' = @('mimo-web/mimo-v2.5-pro','mimo-web/mimo-v2.5','mimo-web/mimo-v2-pro','mimo-web/mimo-v2-flash','mimo-web/mimo-v2-omni')
+    # Meta WEB (meta.ai session) - Llama models via the meta-web bridge.
+    'meta-web' = @('meta-web/meta/llama-4-maverick','meta-web/meta/llama-4-scout','meta-web/meta/llama-3.3-70b','meta-web/meta/llama-3.1-405b','meta-web/meta/llama-3.1-70b')
 }
 $adminToken = $Token
 $extConfig = Join-Path $HOME 'omniroute-cookie-pusher\config.js'
@@ -547,6 +610,14 @@ try {
                 $ordered = @($comboFamilies[$name] | Where-Object { $_ -in $mimoWeb })
                 $modelIds = @($ordered + @($mimoWeb | Where-Object { $_ -notin $ordered }) | Select-Object -Unique)
             }
+        } elseif ($name -eq 'meta-web') {
+            # bridge models may not be in the gateway catalog yet, so source the
+            # combo straight from the live bridge probe, flagship-first.
+            $modelIds = @($metaWeb | Sort-Object)
+            if ($modelIds.Count -gt 0) {
+                $ordered = @($comboFamilies[$name] | Where-Object { $_ -in $metaWeb })
+                $modelIds = @($ordered + @($metaWeb | Where-Object { $_ -notin $ordered }) | Select-Object -Unique)
+            }
         } else {
             # flagship-first order, filtered to ids the live catalog actually serves,
             # then append the family's remaining chat routes (so the route covers ALL
@@ -574,7 +645,7 @@ try {
     Write-Host "combo route sync skipped (dashboard API unreachable): $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
-$models = @($auto + $autoMajors + $nvidia + $ocFree + $orFree + $webChat + $mimo + $mimoWeb + $comboRoutes + $curated | Sort-Object -Unique)
+$models = @($auto + $autoMajors + $nvidia + $ocFree + $orFree + $webChat + $mimo + $mimoWeb + $metaWeb + $comboRoutes + $curated | Sort-Object -Unique)
 if ($models.Count -eq 0) {
     Write-Host 'No routes discovered - gateway unreachable or catalog empty?' -ForegroundColor Red
     exit 1
@@ -595,7 +666,7 @@ $cache = [ordered]@{
 }
 $json = $cache | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($cacheFile, $json, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majors + $($comboRoutes.Count) combo/* routes + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena/deepseek) + $($mimo.Count) mimo + $($mimoWeb.Count) mimo-web + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
+Write-Host "Cache seeded: $($auto.Count) auto + $($autoMajors.Count) auto/* majors + $($comboRoutes.Count) combo/* routes + $($nvidia.Count) nvidia/ + $($ocFree.Count) OpenCode free + $($orFree.Count) OpenRouter free + $($webChat.Count) web(qwen/zai/lmarena/deepseek) + $($mimo.Count) mimo + $($mimoWeb.Count) mimo-web + $($metaWeb.Count) meta-web + $($curated.Count) curated -> $cacheFile" -ForegroundColor Green
 
 } # end -CombosOnly skip (cache seed)
 
@@ -662,6 +733,7 @@ if (Test-Path $ccFile) {
         ($_ -like 'openrouter/*' -and $_ -like '*:free') -or
         ($_ -match 'mimo') -or
         ($_ -like 'mimo-web/*') -or
+        ($_ -like 'meta-web/*') -or
         ($_ -like 'qwen-web/*' -or $_ -like 'zai-web/*' -or $_ -like 'lmarena/*' -or $_ -like 'no-think/lmarena/*' -or $_ -like 'deepseek-web/*') -or
         $_ -in $curated
     })

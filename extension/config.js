@@ -7,6 +7,8 @@
 export const DEFAULT_URL = 'http://localhost:20128';
 export const DEFAULT_API_KEY = '';
 
-// Local cookie bridges (mimo-web-bridge on 20135) - cookies are pushed here
-// directly instead of into a gateway connection.
+// Local cookie bridges — cookies are pushed here directly instead of into a
+// gateway connection.
+//   mimo-web-bridge   (20135) — Xiaomi MiMo AI Studio
+//   meta-web-bridge    (20136) — Meta AI (Llama models)
 export const BRIDGE_URL = 'http://127.0.0.1:20135';

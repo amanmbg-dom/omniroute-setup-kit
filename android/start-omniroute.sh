@@ -2,7 +2,7 @@
 # =============================================================================
 #  start-omniroute.sh - start the full OmniRoute stack on Android (Termux),
 #  everyday-phone edition:
-#    gateway (20128) + mimo-web bridge (20135) + gemini/gflow bridge (20133)
+#    gateway (20128) + mimo-web bridge (20135) + meta-web bridge (20136) + deepseek-web bridge (20137) + gemini/gflow bridge (20133)
 #    + flowui bridge (20134, needs chromium) + wake lock so the phone never
 #    sleeps the stack.
 #
@@ -86,6 +86,41 @@ else
 fi
 
 # =============================================================================
+# 2.1 META-WEB BRIDGE  (20136) - pure Node, no browser needed
+# =============================================================================
+if port_up 20136; then
+  echo "[meta-web] already running on 20136 - skipping"
+else
+  if [ -f ~/omniroute-android/bridge/meta-web-bridge/bridge.mjs ]; then
+    echo "[meta-web] starting bridge (20136)..."
+    nohup node ~/omniroute-android/bridge/meta-web-bridge/bridge.mjs \
+      >"$LOG_DIR/meta-web.log" 2>&1 &
+    echo "[meta-web] pid $!"
+  else
+    echo "[meta-web] bridge.mjs not found - skipping"
+  fi
+fi
+
+# =============================================================================
+# 2.5 DEEPSEEK-WEB BRIDGE  (20137) - pure Node, no browser needed. Replaces the
+#     gateway's built-in deepseek-web executor with one that AUTO-CONTINUES long
+#     chats (DeepSeek's web API ends long responses with INCOMPLETE - the
+#     "Continue generating" button - and the built-in executor truncates there).
+# =============================================================================
+if port_up 20137; then
+  echo "[deepseek-web] already running on 20137 - skipping"
+else
+  if [ -f ~/omniroute-android/bridge/deepseek-web-bridge/bridge.mjs ]; then
+    echo "[deepseek-web] starting bridge (20137, auto-continue)..."
+    nohup node ~/omniroute-android/bridge/deepseek-web-bridge/bridge.mjs \
+      >"$LOG_DIR/deepseek-web.log" 2>&1 &
+    echo "[deepseek-web] pid $!"
+  else
+    echo "[deepseek-web] bridge.mjs not found - skipping"
+  fi
+fi
+
+# =============================================================================
 # 3. GEMINI / GFLOW BRIDGE  (20133) - python + gemini_webapi
 # =============================================================================
 if port_up 20133; then
@@ -136,6 +171,8 @@ fi
 if [ -f ~/.omniroute/storage.sqlite ]; then
   for reg in \
     ~/omniroute-android/bridge/mimo-web-bridge/register-mimo-web.mjs \
+    ~/omniroute-android/bridge/meta-web-bridge/register-meta-web.mjs \
+    ~/omniroute-android/bridge/deepseek-web-bridge/register-deepseek-web.mjs \
     ~/omniroute-android/bridge/gemini-bridge/register-gflow.mjs \
     ~/omniroute-android/bridge/flow-browser/register-flowui.mjs; do
     if [ -f "$reg" ]; then
@@ -174,7 +211,7 @@ fi
 
 echo
 echo "Port status:"
-for p in "$PORT" 20133 20134 20135 20136; do
+for p in "$PORT" 20133 20134 20135 20136 20137; do
   port_up "$p" && echo "  $p : UP" || echo "  $p : down"
 done
 echo

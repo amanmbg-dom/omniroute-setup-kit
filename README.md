@@ -143,6 +143,10 @@ one manual step:
     aistudio.xiaomimimo.com session — `mimo-web/*` + `combo/mimo-web`; the
     Cookie Pusher sends the session straight to the bridge, since the gateway
     ships no `xiaomimimo-web` executor)
+8e. Installs the **meta-web bridge** (free Meta AI Llama chat via your
+    meta.ai session — `meta-web/*` + `combo/meta-web`; the Cookie Pusher
+    sends the session straight to the bridge, since the gateway ships no
+    `meta-web` executor)
 9. Installs the **Claude Code CLI** if missing (`npm i -g
    @anthropic-ai/claude-code`), then **wires Claude Code** to the gateway
    (merges the `ANTHROPIC_*` env block into `~/.claude/settings.json`,
@@ -278,6 +282,12 @@ OmniRoute API key, or use the model names directly:
   supported `openai-compatible` node mechanism — same pattern as `gflow`/
   `flowui`. `fix-model-cache.ps1` auto-starts it; sign in at
   aistudio.xiaomimimo.com, then Cookie Pusher → Grab & push sessions
+- `meta-web/<model>` / `combo/meta-web` — the **Meta AI web version**: your
+  meta.ai session through the local `meta-web-bridge`
+  (`bridge/meta-web-bridge`, port 20136). The bridge translates Meta AI's
+  GraphQL chat API to OpenAI format, using your session cookies (c_user, xs,
+  datr) — same pattern as `mimo-web`. `fix-model-cache.ps1` auto-starts it;
+  sign in at meta.ai, then Cookie Pusher → Grab & push sessions
 
 ## Claude Code
 
@@ -658,6 +668,7 @@ a DNS route with your own domain for a permanent URL.
 | Claude Web | 37 | varies | ⚠️ Needs refresh | Cookie Pusher → Grab |
 | ChatGPT Web | 7 | varies | ⚠️ Rate limited | Wait or push new account |
 | MiMo Web | 12 | varies | ❌ No session | Sign in at aistudio.xiaomimimo.com |
+| Meta AI | 6 | varies | ❌ No session | Sign in at meta.ai |
 | Arena/LMArena | 95 | varies | ⚠️ Session expired | Log in at lmarena.ai |
 | HuggingChat | 24 | varies | ❌ Session expired | Log in at huggingface.co/chat |
 
@@ -677,6 +688,7 @@ a DNS route with your own domain for a permanent URL.
 | `combo/lmarena-fast` | Arena: low/medium thinking only (fast) |
 | `combo/lmarena-slow` | Arena: high/xhigh thinking only (smart) |
 | `combo/mimo` | MiMo open-source V2.5 across all providers |
+| `combo/meta-web` | Meta AI Llama: Maverick → Scout → 3.3 → 3.1 |
 | `mistral/mistral-large-latest` | Direct Mistral, fastest route |
 
 ### Top free alternatives to paid services
