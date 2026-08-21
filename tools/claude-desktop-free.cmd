@@ -1,40 +1,45 @@
 @echo off
+REM claude-desktop-free.cmd — Launch Claude Desktop with free OmniRoute models
+REM
+REM Usage: Double-click this file, or run from command prompt.
+REM Starts: proxy (port 20228) + Claude Desktop with env vars
+
 setlocal
 
-set PROXY_PORT=10150
-set PROXY_URL=http://127.0.0.1:%PROXY_PORT%
-
-rem === Start proxy if not running ===
-curl -s %PROXY_URL%/healthz >nul 2>&1
-if errorlevel 1 (
-  echo Starting proxy on port %PROXY_PORT%...
-  start "" /b node "%~dp0claude-desktop-proxy.mjs"
-  timeout /t 3 >nul
-)
-
-rem === Verify both services ===
-curl -s %PROXY_URL%/healthz >nul 2>&1
-if errorlevel 1 (
-  echo ERROR: Proxy failed to start
-  exit /b 1
-)
-curl -s http://127.0.0.1:20128/healthz >nul 2>&1
-if errorlevel 1 (
-  echo ERROR: OmniRoute not running - start it first
-  exit /b 1
-)
-
-echo.
-echo   Proxy:     %PROXY_URL%
-echo   OmniRoute: http://127.0.0.1:20128
-echo   Models:    Free (DeepSeek, MiMo, Gemini, Mistral...)
-echo.
-
-rem === Set env vars for Claude Desktop ===
-set ANTHROPIC_BASE_URL=%PROXY_URL%
+set ANTHROPIC_BASE_URL=http://127.0.0.1:20228
 set ANTHROPIC_AUTH_TOKEN=omniroute
+set CLAUDE_CODE_USE_GATEWAY=true
 
-rem === Launch Claude Desktop ===
-start "" "%LOCALAPPDATA%\AnthropicClaude\claude.exe"
+echo Starting Claude Desktop with free OmniRoute models...
+echo.
+
+REM Check if proxy is already running
+netstat -ano | findstr "20228" | findstr "LISTENING" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Starting proxy on port 20228...
+    start /B "" node "%~dp0claude-desktop-proxy.mjs"
+    timeout /t 5 /nobreak >nul
+) else (
+    echo Proxy already running on port 20228.
+)
+
+REM Launch Claude Desktop
+for /f "delims=" %%i in ('dir /b /ad /o-n "%LOCALAPPDATA%\AnthropicClaude\app-*"') do (
+    set "CLAUDE_EXE=%LOCALAPPDATA%\AnthropicClaude\%%i\claude.exe"
+    goto found
+)
+:found
+
+if exist "%CLAUDE_EXE%" (
+    echo Launching Claude Desktop...
+    start "" "%CLAUDE_EXE%"
+    echo Done! Claude Desktop is running with free models.
+    echo.
+    echo Gateway: http://localhost:20228
+    echo API Key: omniroute
+) else (
+    echo Claude Desktop not found. Install from claude.com/download
+    pause
+)
 
 endlocal
